@@ -1,0 +1,163 @@
+# Product Requirements Document: RepoMap
+
+| | |
+|---|---|
+| **Product** | RepoMap |
+| **Event** | IBM Bob 2.0 Hackathon |
+| **Status** | Draft — hackathon build |
+| **Deadline** | Sep 27, 2026, 8:30 PM IST |
+
+---
+
+## 1. Summary
+
+RepoMap is an AI teammate, built on IBM Bob 2.0, that turns a codebase's full-repo understanding into a shared, living reference for a team. It generates a live map of any repository and uses that same map to onboard new developers, guide debugging, clarify vague feature requests before code is written, and check whether a change is safe to release.
+
+## 2. Problem statement
+
+Teams lose time and make mistakes at four recurring moments, all caused by the same underlying gap: **no one has a shared, living picture of the codebase.**
+
+| Moment | Current pain |
+|---|---|
+| A new developer joins | Days lost figuring out what does what and where to start |
+| A developer debugs or reviews code | No visibility into where the real problem is vs. where code is over-engineered |
+| A developer or client requests a feature in plain English | Vague asks lead to wrong assumptions, scope creep, and disputes later |
+| A change is about to ship | No clear, reasoned signal on whether it's actually safe for production |
+
+## 3. Goals
+
+- Prove that Bob 2.0's full-repository context can be turned into a usable, visual map of any codebase
+- Cut the time a new developer needs to become productive in an unfamiliar repo
+- Give developers a repo-grounded way to catch vague requirements before they start building
+- Demonstrate Bob 2.0 visibly performing the analysis, not just being referenced as a tool
+
+### 3.1 Success metrics (for the hackathon demo)
+
+- Map generation completes and is accurate for the demo repository
+- A judge watching the demo can, within the 5-minute video, articulate what the product does without narration over the visuals
+- Bob's task/session report clearly shows Bob performing the analysis for each demoed module
+- Submission includes all required lablab.ai assets (see Section 10)
+
+## 4. Personas
+
+**New developer ("Nadia")** — just joined the project. Needs a map of the codebase, a plain-English summary, and a short list of files to start reading.
+
+**Working developer ("Devon")** — already on the project, asked to fix a bug or review a change. Needs to know where the problem actually is, and whether a request they've been given is well-specified enough to start on.
+
+**Team lead / client-facing developer ("Priya")** — receives vague feature requests and needs to turn them into a clear scope before committing to a timeline.
+
+## 5. Scope
+
+Scope is organized into three tiers, reflecting what is built and demoed live versus what is described as roadmap. This distinction is a requirement of this PRD, not just a build-order note — the submission must not represent Tier 3 as working.
+
+### Tier 1 — In scope, built and demoed live
+
+**5.1 Onboarding Map**
+- System ingests a target repository via Bob 2.0
+- System generates: a plain-English project summary; a structural breakdown by folder/module (what each part is responsible for); a ranked list of 2–3 files to read first; a visual diagram of module/file relationships; a short list of common gotchas
+- User can view the diagram and click into a module to see Bob's explanation of it
+
+**5.2 Scope Clarifier ("ScopeShield")**
+- User submits a free-text feature request or prompt
+- System returns: a risk analysis identifying hidden scope or technical risk; a list of clarifying questions to ask before starting; a drafted, professional reply the user can send as-is or edit; framing grounded in the repo's actual stack (pulled from Section 5.1's analysis, when available)
+
+### Tier 2 — In scope if time allows, built simplified
+
+**5.3 Debug & Code Review Overlay**
+- Reuses the Section 5.1 diagram
+- Bob flags one seeded bug (🔴) and one seeded instance of over-engineered/redundant code (🟡) in the demo repository, each with a one-line rationale
+- Explicitly not in scope for the hackathon: comprehensive bug-finding across an arbitrary repo; this module is demoed against a prepared example, not claimed as general-purpose
+
+**5.4 Release Readiness Check (simplified)**
+- User submits a diff or branch
+- Bob reasons over the change and returns a verdict (safe / needs review) with specific reasons and an approximation of blast radius (what the change touches)
+- Explicitly not in scope: real CI integration, actual test execution, or real security scanning — the verdict is Bob's reasoned judgment, and the product must represent it as such, not as automated pipeline output
+
+### Tier 3 — Out of scope for this build; described as roadmap only
+
+**5.5 Application Maintenance**
+- Proactive scan of a deployed repo for bugs, security issues, performance issues, stale dependencies, and compatibility gaps
+- A prioritized AI Fix Plan
+- An approve → Bob implements → tests → verifies loop
+- Rationale for exclusion: the implement-and-verify loop is autonomous code modification, which carries real failure risk in a live demo and cannot be built to a trustworthy standard in the remaining time. The submission's long description may state that this module is a direct extension of Section 5.3's flagging logic, as a roadmap item — it must not be presented as implemented.
+
+## 6. Functional requirements
+
+| ID | Requirement | Tier |
+|---|---|---|
+| FR-1 | System shall accept a target repository as input to Bob 2.0 | 1 |
+| FR-2 | System shall produce a plain-English summary of the repository's purpose | 1 |
+| FR-3 | System shall produce a ranked list of 2–3 recommended starting files | 1 |
+| FR-4 | System shall render a visual diagram of module/file relationships | 1 |
+| FR-5 | System shall surface a short list of gotchas for the repository | 1 |
+| FR-6 | System shall accept free-text feature requests and return risk analysis, clarifying questions, and a drafted reply | 1 |
+| FR-7 | System shall ground Scope Clarifier output in the repo's detected stack when a repo has already been analyzed | 1 |
+| FR-8 | System shall flag at least one bug and one over-engineered code location on the diagram, with rationale | 2 |
+| FR-9 | System shall accept a diff and return a safe/needs-review verdict with reasons | 2 |
+| FR-10 | System shall clearly label any Bob-reasoned verdict (FR-9) as such, not as automated test/CI output | 2 |
+
+## 7. Non-functional requirements
+
+- **Demo reliability over completeness:** every Tier 1/2 feature demoed live must be tested against the actual demo repository beforehand; nothing should be attempted live for the first time
+- **Transparency of AI involvement:** every module's output should be traceable to a specific Bob task/session, exportable for the submission
+- **Simplicity of demo repo:** the sample repository used for the demo should be small enough to fully reason about in the video's time budget, with issues (bug, over-engineered file) deliberately seeded rather than found organically
+- Performance, security-hardening, auth, and multi-user support are explicitly not requirements for this build — this is a proof-of-concept, not a production system
+
+## 8. System overview
+
+```
+                    GitHub Repository (demo repo)
+                              │
+                     Bob 2.0 ingests repo
+                              │
+                        Repo Map
+          (structure, purposes, entry points, dependencies)
+                              │
+              ┌───────────────┴───────────────┐
+              │                                │
+   Onboarding Map (5.1)              Scope Clarifier (5.2)
+              │                                │
+   Debug/Review Overlay (5.3)        Release Readiness (5.4)
+        [Tier 2 — if time allows]     [Tier 2 — if time allows]
+
+   Application Maintenance (5.5) — roadmap only, not built
+```
+
+Frontend calls a thin backend API, which calls Bob 2.0 for repo ingestion and for each module's reasoning. No independent CI, test runner, or security scanner is integrated for this build.
+
+## 9. Milestones
+
+| Milestone | Scope |
+|---|---|
+| M1 | Repo Map generation working (backend + Bob calls) |
+| M2 | Onboarding Map UI + diagram rendering |
+| M3 | Scope Clarifier working end-to-end |
+| **Tier 1 complete — submittable checkpoint** | |
+| M4 | Debug overlay on seeded demo repo |
+| M5 | Release Readiness verdict on seeded diff |
+| M6 | Demo video recorded, submission assets assembled |
+
+## 10. Submission requirements (lablab.ai)
+
+- Working proof-of-concept in a GitHub repository, inspectable by judges
+- Bob IDE task/session report exported, showing Bob's contribution
+- Title (≤50 chars), short description (≤255 chars), long description (≥100 words)
+- Tracks/categories, technologies used
+- Cover image (16:9)
+- Demo video (≤5 min, ≤300MB)
+- Long description must distinguish built (Tier 1/2) from roadmap (Tier 3)
+
+## 11. Risks
+
+| Risk | Mitigation |
+|---|---|
+| Bob's analysis is inaccurate or inconsistent on the demo repo | Rehearse against the exact demo repo beforehand; don't demo live against an unfamiliar repo |
+| Tier 2 features aren't finished in time | They are explicitly optional; Tier 1 alone is a complete, submittable product |
+| Release verdict (5.4) is mistaken for real CI/test output | UI must label it as Bob's reasoning, not automated pipeline results |
+| Scope creep toward Tier 3 mid-build | This PRD fixes Tier 3 as roadmap-only; do not begin implementation work on 5.5 |
+
+## 12. Open questions
+
+- Final hackathon track names (site listed tracks as TBA as of last check — confirm before locking submission copy)
+- Which sample repository will be used for the demo, and what bug/over-engineered file will be seeded into it
+- Final tech stack choices (Section 8 assumes a thin frontend + backend calling Bob 2.0; confirm with team's fastest stack)
