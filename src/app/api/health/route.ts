@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
+import { isBobConfigured } from "@/server/bob";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,9 @@ export function GET() {
     status: "ok",
     service: "repomap",
     bob: {
-      configured: Boolean(env.BOB_API_BASE_URL && env.BOB_API_KEY),
+      configured: isBobConfigured(),
+      analysisPath: env.BOB_ANALYSIS_PATH,
+      model: env.BOB_MODEL ?? null,
     },
   });
 }

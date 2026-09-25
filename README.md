@@ -3,11 +3,11 @@
 An AI teammate built on IBM Bob 2.0 that turns full-repository understanding
 into a shared, living map of any codebase.
 
-**Status: project foundation only.** This repository currently contains the
-application shell (landing page, dashboard shell, a health API route) and
-nothing else. None of the product modules described in the PRD are built yet.
-See [docs/RepoMap-PRD.txt](docs/RepoMap-PRD.txt) for scope — it is the source
-of truth.
+**Status: M1 (backend) complete.** The landing page, dashboard shell, health
+route and the RepoMap generation API exist. The dashboard still renders an
+empty shell — the diagram and the Tier 1/2 modules are not built. See
+[docs/RepoMap-PRD.txt](docs/RepoMap-PRD.txt) for scope — it is the source of
+truth.
 
 ## Stack
 
@@ -40,6 +40,98 @@ pnpm build      # production build
 pnpm start      # serve the production build
 pnpm lint       # eslint
 pnpm typecheck  # tsc --noEmit
+pnpm test       # node:test unit tests (data contract, normaliser, Bob payload parsing)
+```
+
+## API
+
+### `POST /api/repomap`
+
+Generates the repo map for a repository (PRD 5.1, FR-1 to FR-5).
+
+```bash
+curl -X POST http://localhost:3000/api/repomap \
+  -H "content-type: application/json" \
+  -d '{"repository":"https://github.com/owner/repo"}'
+```
+
+`repository` accepts a GitHub URL or the `owner/repo` shorthand. Responses:
+
+| Status | Meaning |
+| --- | --- |
+| 200 | RepoMap contract (below) |
+| 400 | Missing/!https/non-GitHub repository input |
+| 502 | IBM Bob 2.0 failed, timed out, or returned unusable analysis |
+| 503 | Bob 2.0 is not configured (no `BOB_API_BASE_URL`) |
+
+The contract lives in `src/features/repomap/schema.ts` and is validated with
+zod on every response:
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "repository": { "url": "...", "slug": "owner/repo", "name": "repo" },
+  "provenance": {                  // PRD §7 traceability
+    "provider": "bob-2.0",
+    "bobTaskId": "task_...",        // null if the service exposes none
+    "model": "...",
+    "requestedAt": "...", "completedAt": "...", "durationMs": 1234
+  },
+  "summary": "...",                // FR-2
+  "stack": ["TypeScript", "Next.js"],
+  "modules": [                     // structural breakdown
+    { "id": "src-app", "name": "web", "path": "src/app",
+      "responsibility": "...", "entryPoints": ["src/app/page.tsx"],
+      "dependsOn": ["src/server"] }
+  ],
+  "recommendedFiles": [            // FR-3, always 2-3 entries
+    { "rank": 1, "path": "README.md", "why": "..." }
+  ],
+  "diagram": {                     // FR-4, framework-agnostic
+    "nodes": [{ "id": "src-app", "label": "web", "kind": "module", "path": "src/app" }],
+    "edges": [{ "id": "...", "source": "src-app", "target": "src-server",
+                "relation": "depends-on" }]
+  },
+  "gotchas": [{ "title": "...", "detail": "..." }]  // FR-5
+}
+```
+
+The diagram is deliberately framework-agnostic; the dashboard will map these
+nodes and edges onto React Flow when the UI work starts.
+
+### `GET /api/health`
+
+Liveness plus whether Bob 2.0 is configured.
+
+## IBM Bob 2.0 integration
+
+`src/server/bob/` is the only place that talks to Bob 2.0:
+
+| File | Role |
+| --- | --- |
+| `provider.ts` | Provider interface + `BobProviderError` |
+| `http-provider.ts` | Real HTTP call (endpoint, project, model, timeout all env-driven) |
+| `prompts.ts` | The single analysis prompt, written from PRD 5.1 |
+| `json.ts` | Tolerant extraction of JSON from model output (fences, prose, envelopes) |
+| `index.ts` | Provider resolution; no silent fallback provider |
+
+Two deliberate choices:
+
+- **No stub/fake provider.** An invented analysis would be indistinguishable
+  from a real one in the UI, which PRD §7 ("transparency of AI involvement")
+  rules out. Without credentials the API returns 503 rather than fake data.
+- **Normalisation, not trust.** `src/features/repomap/normalize.ts` converts
+  Bob's answer into the strict contract: capped at 3 recommended files, deduped
+  modules, derived diagram nodes/edges, dropped junk. It raises
+  `EmptyRepoMapAnalysisError` only when there is no usable map at all, rather
+  than inventing one.
+
+`scripts/fake-bob-server.mjs` is a local stand-in used to verify the pipeline
+before real credentials exist. It is a development script, not part of the app:
+
+```bash
+node scripts/fake-bob-server.mjs                                  # terminal 1
+$env:BOB_API_BASE_URL="http://127.0.0.1:4010"; pnpm dev           # terminal 2 (PowerShell)
 ```
 
 ## Project structure
@@ -47,19 +139,30 @@ pnpm typecheck  # tsc --noEmit
 ```
 docs/
   RepoMap-PRD.txt        Product requirements (source of truth)
+scripts/
+  fake-bob-server.mjs     Local Bob 2.0 stand-in for pipeline verification (dev only)
 src/
   app/
     layout.tsx           Root layout, header, footer
     page.tsx             Landing page
-    dashboard/page.tsx   Dashboard shell (empty)
-    api/health/route.ts  Health check route — thin backend proof
+    dashboard/page.tsx   Dashboard shell (still empty)
+    api/health/route.ts  Health check route
+    api/repomap/route.ts POST /api/repomap — repo map generation (M1)
   components/
     layout/              Site header and footer
   features/
     registry.ts          Declares every PRD module, its tier, and status
+    repomap/
+      schema.ts          RepoMap + Bob analysis contracts (zod)
+      normalize.ts       Bob answer -> strict RepoMap, diagram derivation
+      request.ts         POST body contract
   lib/
-    env.ts               Server-side env placeholders (validated with zod)
+    env.ts               Server-side env, validated with zod
+    repository-url.ts    Repository input parsing/canonicalisation
     cn.ts                Class-name helper
+  server/
+    bob/                 The only code that talks to IBM Bob 2.0
+    repomap/generate.ts  M1 orchestration: Bob call -> RepoMap
 ```
 
 ## Environment variables
@@ -69,9 +172,18 @@ IBM Bob 2.0 integration has a defined seam. Never expose them to the browser.
 
 | Variable | Purpose |
 | --- | --- |
-| `BOB_API_BASE_URL` | Base URL of the IBM Bob 2.0 service |
+| `BOB_API_BASE_URL` | Base URL of the IBM Bob 2.0 service (required for analysis) |
 | `BOB_API_KEY` | API token for IBM Bob 2.0 |
 | `BOB_PROJECT_ID` | Bob 2.0 project/team that analyses submitted repositories |
+| `BOB_ANALYSIS_PATH` | Analysis path appended to the base URL (default `v1/repositories/analyze`) |
+| `BOB_MODEL` | Optional model override |
+| `BOB_TIMEOUT_MS` | Analysis timeout in ms (default `120000`) |
+
+**Bob 2.0 endpoint shape is an assumption.** The request/response contract is
+fixed in `src/server/bob/http-provider.ts`, but the actual URL, auth header and
+payload keys depend on the Bob 2.0 access the team is given. When credentials
+arrive, adjust that one file (or set `BOB_ANALYSIS_PATH`) rather than the rest
+of the app.
 
 ## Build plan
 
