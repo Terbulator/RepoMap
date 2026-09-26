@@ -32,6 +32,12 @@ export const NO_REPOSITORY_MESSAGE =
 export const NETWORK_ERROR_MESSAGE =
   "Could not reach the ScopeShield API. Check your connection and try again.";
 
+/** API route the client calls to reach IBM Bob 2.0 (server-side, credentials protected). */
+export const BOB_SCOPE_API_PATH = "/api/scope/analyze";
+
+/** Default timeout for the Bob 2.0 scope API round-trip (FR-7: 15s). */
+export const DEFAULT_BOB_TIMEOUT_MS = 15_000;
+
 export type ScopeAnalysisResult = {
   request: string;
   analysis: RiskAnalysis;
@@ -49,7 +55,7 @@ export type ScopeAnalysisResult = {
 
 export type ScopeAnalysisOutcome =
   | { status: "success"; result: ScopeAnalysisResult }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; fellBackToMock: boolean };
 
 export type RequestValidation =
   | { ok: true; request: string }
@@ -80,7 +86,7 @@ export function validateFeatureRequest(input: string): RequestValidation {
  * Resolves with a success result, or with the error message to show. Never
  * rejects, and never falls back to invented data.
  */
-export async function runScopeAnalysis(
+async function runMockAnalysis(
   request: string,
   deps: ScopeShieldDeps = {},
 ): Promise<ScopeAnalysisOutcome> {

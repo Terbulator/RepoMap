@@ -15,8 +15,9 @@ export default function ScopeShieldPage() {
         hidden scope per architectural layer. Stage 3 — clarifying questions.
         Stage 4 — a drafted professional reply. Stage 5 — the detected
         repository context every output is grounded in. Stage 6 — loading,
-        validation and error states. Stages 2–6 are mock templates computed in
-        the browser; no AI is called.
+        validation and error states. Clicking &quot;Analyze Scope&quot; sends the request
+        to IBM Bob 2.0 via /api/scope/analyze; if Bob is unavailable the UI
+        falls back to deterministic mock generators.
       </p>
 
       <div className="mt-8">

@@ -1,0 +1,608 @@
+"use client";
+
+import { useMemo, useRef, useEffect, useState, Suspense } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { OrbitControls, Text, Html } from "@react-three/drei";
+import * as THREE from "three";
+import { Module, Relationship, RepoMapAnalysis } from "@/types/onboarding";
+import { inferCategory, computeLayout } from "./common";
+import { GitBranch, Maximize2, X, Search, Layers, MapPin } from "lucide-react";
+
+const CATEGORY_COLORS: Record<string, THREE.Color> = {
+  infrastructure: new THREE.Color("#10b981"),
+  analysis: new THREE.Color("#f59e0b"),
+  shared: new THREE.Color("#06b6d4"),
+  features: new THREE.Color("#a855f7"),
+  api: new THREE.Color("#3b82f6"),
+  other: new THREE.Color("#64748b"),
+};
+
+const CATEGORY_HEIGHTS: Record<string, number> = {
+  infrastructure: 3.5,
+  analysis: 5,
+  shared: 4,
+  features: 3,
+  api: 4.5,
+  other: 2.5,
+};
+
+interface BuildingProps {
+  module: Module;
+  position: THREE.Vector3;
+  category: string;
+  isSelected: boolean;
+  isHovered: boolean;
+  isConnected: boolean;
+  onClick: () => void;
+  onHover: (hovered: boolean) => void;
+}
+
+function Building({ module, position, category, isSelected, isHovered, isConnected, onClick, onHover }: BuildingProps) {
+  const color = CATEGORY_COLORS[category] || CATEGORY_COLORS.other;
+  const height = CATEGORY_HEIGHTS[category] || CATEGORY_HEIGHTS.other;
+  const baseSize = 2.5;
+
+  const emissiveIntensity = isSelected ? 0.6 : isHovered ? 0.4 : isConnected ? 0.2 : 0;
+
+  return (
+    <group
+      ref={meshRef}
+      position={position}
+      onClick={onClick}
+      onPointerOver={() => onHover(true)}
+      onPointerOut={() => onHover(false)}
+      cursor="pointer"
+    >
+      <mesh
+        position={[0, height / 2, 0]}
+        castShadow
+        receiveShadow
+      >
+        <boxGeometry args={[baseSize, height, baseSize]} />
+        <meshStandardMaterial
+          color={color}
+          roughness={0.3}
+          metalness={0.2}
+          emissive={color}
+          emissiveIntensity={emissiveIntensity}
+          transparent
+          opacity={isSelected || isHovered ? 1 : 0.9}
+        />
+      </mesh>
+
+      {(isSelected || isHovered) && (
+        <mesh
+          position={[0, height / 2, 0]}
+          scale={isSelected ? 1.3 : 1.1}
+        >
+          <boxGeometry args={[baseSize * 1.02, height * 1.02, baseSize * 1.02]} />
+          <meshBasicMaterial
+            color={color}
+            transparent
+            opacity={isSelected ? 0.3 : 0.15}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
+        </mesh>
+      )}
+
+      <Html
+        transform
+        position={[0, height + 0.8, 0]}
+        style={{
+          pointerEvents: "none",
+          textAlign: "center",
+          minWidth: "160px",
+          maxWidth: "200px",
+        }}
+      >
+        <div
+          className={`transition-all duration-300 ${
+            isSelected
+              ? "scale-105 opacity-100"
+              : isHovered
+              ? "scale-100 opacity-100"
+              : "scale-95 opacity-70"
+          }`}
+        >
+          <div className="bg-neutral-950/95 border border-neutral-700/50 rounded-lg px-2 py-1.5 text-xs text-white backdrop-blur-sm shadow-lg">
+            <div className="font-semibold text-sm truncate">{module.name}</div>
+            <div className="text-[10px] text-neutral-400 truncate mt-0.5">{module.path}</div>
+          </div>
+        </div>
+      </Html>
+
+      {isSelected && (
+        <Html
+          transform
+          position={[0, height + 1.8, 0]}
+          style={{ pointerEvents: "none", textAlign: "center" }}
+        >
+          <div className="flex items-center gap-1 px-2 py-1 bg-primary-500/20 border border-primary-500/30 rounded-full text-xs text-primary-300 backdrop-blur-sm shadow-lg">
+            <MapPin className="w-3 h-3" />
+            Selected
+          </div>
+        </Html>
+      )}
+    </group>
+  );
+}
+
+interface RoadProps {
+  source: THREE.Vector3;
+  target: THREE.Vector3;
+  color: THREE.Color;
+  isActive: boolean;
+  isHighlighted: boolean;
+  label?: string;
+  progress?: number;
+}
+
+function Road({ source, target, color, isActive, isHighlighted, label, progress = 0 }: RoadProps) {
+  const curveRef = useRef<THREE.CatmullRomCurve3>(null);
+  const pointsRef = useRef<THREE.Vector3[]>([]);
+  const distanceRef = useRef(0);
+
+  useEffect(() => {
+    const midX = (source.x + target.x) / 2;
+    const midZ = (source.z + target.z) / 2;
+    const distance = source.distanceTo(target);
+    distanceRef.current = distance;
+    const height = Math.max(1.5, distance * 0.15);
+
+    const control1 = new THREE.Vector3(
+      source.x + (target.x - source.x) * 0.25,
+      height,
+      source.z + (target.z - source.z) * 0.25
+    );
+    const control2 = new THREE.Vector3(
+      source.x + (target.x - source.x) * 0.75,
+      height,
+      source.z + (target.z - source.z) * 0.75
+    );
+
+    pointsRef.current = [source.clone(), control1, control2, target.clone()];
+    curveRef.current = new THREE.CatmullRomCurve3(pointsRef.current);
+  }, [source, target]);
+
+  const roadPoints = curveRef.current?.getPoints(50) || [];
+  const opacity = isHighlighted ? 0.9 : isActive ? 0.5 : 0.25;
+  const width = isHighlighted ? 0.5 : 0.35;
+  const distance = distanceRef.current;
+
+  return (
+    <group>
+      <line
+        geometry={new THREE.BufferGeometry().setFromPoints(roadPoints)}
+        material={
+          isHighlighted
+            ? new THREE.LineBasicMaterial({
+                color,
+                transparent: true,
+                opacity,
+                linewidth: 3,
+                blending: THREE.AdditiveBlending,
+              })
+            : new THREE.LineBasicMaterial({
+                color,
+                transparent: true,
+                opacity,
+                linewidth: 2,
+              })
+        }
+      />
+      {isActive && (
+        <FlowParticles
+          curve={curveRef.current!}
+          color={color}
+          count={Math.max(3, Math.floor(distance / 2))}
+          speed={0.002}
+        />
+      )}
+      {label && roadPoints.length > 25 && (
+        <Html
+          transform
+          position={roadPoints[25].clone().add(new THREE.Vector3(0, 0.8, 0))}
+          style={{ pointerEvents: "none" }}
+        >
+          <div className="px-1.5 py-0.5 bg-neutral-950/90 border border-neutral-700/50 rounded text-[9px] text-neutral-400 font-mono backdrop-blur-sm whitespace-nowrap">
+            {label}
+          </div>
+        </Html>
+      )}
+    </group>
+  );
+}
+
+function FlowParticles({ curve, color, count, speed }: { curve: THREE.Curve<THREE.Vector3>; color: THREE.Color; count: number; speed: number }) {
+  const particles = useRef<THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>>(null);
+  const positions = useRef<Float32Array>(new Float32Array(count * 3));
+  const progress = useRef<Float32Array>(new Float32Array(count));
+
+  useEffect(() => {
+    for (let i = 0; i < count; i++) {
+      progress.current[i] = i / count;
+    }
+  }, [count]);
+
+  useFrame((_, delta) => {
+    if (!particles.current) return;
+    
+    const posArray = particles.current.geometry.attributes.position.array as Float32Array;
+    
+    for (let i = 0; i < count; i++) {
+      progress.current[i] = (progress.current[i] + speed * delta * 60) % 1;
+      const point = curve.getPoint(progress.current[i]);
+      posArray[i * 3] = point.x;
+      posArray[i * 3 + 1] = point.y + 0.1;
+      posArray[i * 3 + 2] = point.z;
+    }
+    
+    particles.current.geometry.attributes.position.needsUpdate = true;
+  });
+
+  return (
+    <points ref={particles.current}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" count={count} itemSize={3} array={positions.current} />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.15}
+        color={color}
+        transparent
+        opacity={0.9}
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
+        sizeAttenuation={true}
+      />
+    </points>
+  );
+}
+
+interface GroundProps {
+  bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
+}
+
+function Ground({ bounds }: GroundProps) {
+  const width = bounds.maxX - bounds.minX + 20;
+  const depth = bounds.maxZ - bounds.minZ + 20;
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+
+  return (
+    <group>
+      <mesh
+        position={[centerX, -0.1, centerZ]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        receiveShadow
+      >
+        <planeGeometry args={[width, depth, 50, 50]} />
+        <meshStandardMaterial
+          color="#0a0f1a"
+          roughness={0.9}
+          metalness={0.05}
+        />
+      </mesh>
+
+      <GridHelper
+        args={[Math.max(width, depth), 5, "#1e293b", "#1e293b"]}
+        position={[centerX, 0, centerZ]}
+      />
+
+      <mesh
+        position={[centerX, -0.05, centerZ]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <planeGeometry args={[width, depth]} />
+        <meshBasicMaterial
+          color="#05080d"
+          transparent
+          opacity={0.3}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+function GridHelper({ args, position }: { args: [number, number, string, string]; position: [number, number, number] }) {
+  const [size, divisions, color1, color2] = args;
+  const step = size / divisions;
+  const half = size / 2;
+
+  const lines: JSX.Element[] = [];
+  
+  for (let i = 0; i <= divisions; i++) {
+    const offset = -half + i * step;
+    lines.push(
+      <line
+        key={`grid-x-${i}`}
+        geometry={new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(offset, 0, -half),
+          new THREE.Vector3(offset, 0, half),
+        ])}
+        material={new THREE.LineBasicMaterial({ color: i === divisions / 2 ? color2 : color1, transparent: true, opacity: 0.15 })}
+      />
+    );
+    lines.push(
+      <line
+        key={`grid-z-${i}`}
+        geometry={new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(-half, 0, offset),
+          new THREE.Vector3(half, 0, offset),
+        ])}
+        material={new THREE.LineBasicMaterial({ color: i === divisions / 2 ? color2 : color1, transparent: true, opacity: 0.15 })}
+      />
+    );
+  }
+
+  return (
+    <group position={position}>
+      {lines}
+    </group>
+  );
+}
+
+interface DistrictLabelProps {
+  name: string;
+  position: THREE.Vector3;
+  color: THREE.Color;
+}
+
+function DistrictLabel({ name, position, color }: DistrictLabelProps) {
+  return (
+    <Html
+      transform
+      position={position.clone().add(new THREE.Vector3(0, 4, 0))}
+      style={{ pointerEvents: "none", textAlign: "center" }}
+    >
+      <div className="px-3 py-1 bg-neutral-950/80 border border-neutral-700/50 rounded-lg text-xs font-medium text-neutral-400 backdrop-blur-sm tracking-wider uppercase">
+        {name}
+      </div>
+    </Html>
+  );
+}
+
+interface CameraControlsProps {
+  onResetView: (camera: THREE.Camera) => void;
+  onFitView: (camera: THREE.Camera) => void;
+}
+
+function CameraControls({ onResetView, onFitView }: CameraControlsProps) {
+  const { camera } = useThree();
+
+  return (
+    <Html
+      transform
+      position={[0, 0, 0]}
+      style={{
+        position: "fixed",
+        top: "16px",
+        right: "16px",
+        zIndex: 100,
+        pointerEvents: "auto",
+      }}
+    >
+      <div className="flex flex-col gap-2">
+        <button
+          onClick={() => onFitView(camera)}
+          className="flex items-center gap-2 px-3 py-2 bg-neutral-900/80 border border-neutral-700/50 text-neutral-200 text-xs font-medium rounded-lg backdrop-blur-sm hover:bg-neutral-800/80 hover:border-neutral-600/50 transition-all duration-200 shadow-lg"
+          aria-label="Fit view"
+        >
+          <Maximize2 className="w-3.5 h-3.5" />
+          Fit View
+        </button>
+        <button
+          onClick={() => onResetView(camera)}
+          className="flex items-center gap-2 px-3 py-2 bg-neutral-900/80 border border-neutral-700/50 text-neutral-200 text-xs font-medium rounded-lg backdrop-blur-sm hover:bg-neutral-800/80 hover:border-neutral-600/50 transition-all duration-200 shadow-lg"
+          aria-label="Reset view"
+        >
+          <GitBranch className="w-3.5 h-3.5" />
+          Reset
+        </button>
+      </div>
+    </Html>
+  );
+}
+
+interface ArchitectureMap3DProps {
+  analysis: RepoMapAnalysis;
+  selectedModuleId: string | null;
+  onModuleSelect: (moduleId: string | null) => void;
+}
+
+function ArchitectureMap3DInner({ analysis, selectedModuleId, onModuleSelect }: ArchitectureMap3DProps) {
+  const { modules, relationships } = analysis;
+  const selectedModule = modules.find((m) => m.id === selectedModuleId);
+
+  const layout = useMemo(() => computeLayout(modules, relationships), [modules, relationships]);
+  const bounds = useMemo(() => {
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    layout.forEach((pos) => {
+      minX = Math.min(minX, pos.x);
+      maxX = Math.max(maxX, pos.x);
+      minZ = Math.min(minZ, pos.z);
+      maxZ = Math.max(maxZ, pos.z);
+    });
+    return { minX, maxX, minZ, maxZ };
+  }, [layout]);
+
+  const buildingPositions = useMemo(() => {
+    const positions = new Map<string, THREE.Vector3>();
+    layout.forEach((pos, id) => {
+      positions.set(id, new THREE.Vector3(pos.x, 0, pos.y));
+    });
+    return positions;
+  }, [layout]);
+
+  const [hoveredModuleId, setHoveredModuleId] = useState<string | null>(null);
+  const [cameraTarget, setCameraTarget] = useState<THREE.Vector3 | null>(null);
+
+  const relatedModules = useMemo(() => {
+    if (!selectedModuleId) return new Set<string>();
+    const related = new Set<string>();
+    relationships.forEach((r) => {
+      if (r.source === selectedModuleId) related.add(r.target);
+      if (r.target === selectedModuleId) related.add(r.source);
+    });
+    return related;
+  }, [selectedModuleId, relationships]);
+
+  const handleBuildingClick = (moduleId: string) => {
+    onModuleSelect(moduleId);
+    const pos = buildingPositions.get(moduleId);
+    if (pos) {
+      setCameraTarget(pos.clone().add(new THREE.Vector3(0, 3, 0)));
+    }
+  };
+
+  const handleBuildingHover = (moduleId: string, hovered: boolean) => {
+    if (hovered) setHoveredModuleId(moduleId);
+    else if (hoveredModuleId === moduleId) setHoveredModuleId(null);
+  };
+
+  const fitView = (camera: THREE.Camera) => {
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+    const maxDim = Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ);
+    const distance = Math.max(maxDim * 1.2, 20);
+    
+    camera.position.set(centerX, distance, centerZ + distance * 0.7);
+    camera.lookAt(centerX, 0, centerZ);
+  };
+
+  const resetView = (camera: THREE.Camera) => {
+    fitView(camera);
+    onModuleSelect(null);
+  };
+
+  useEffect(() => {
+    // Initial fit will be done by CameraControls after mount
+  }, []);
+
+  const roadColor = new THREE.Color("#64748b");
+
+  return (
+    <>
+      <Canvas
+        camera={{ position: [0, 30, 30], fov: 50 }}
+        shadows
+        gl={{ antialias: true, alpha: true, preserveDrawingBuffer: false }}
+        style={{ width: "100%", height: "100%", outline: "none" }}
+        onCreated={(state) => {
+          fitView(state.camera);
+        }}
+      >
+        <fog attach="fog" args={["#05080d", 5, 60]} />
+        
+        <ambientLight color="#ffffff" intensity={0.4} />
+        <directionalLight
+          position={[20, 40, 20]}
+          color="#ffffff"
+          intensity={1.5}
+          castShadow
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+          shadow-camera-near={1}
+          shadow-camera-far={100}
+          shadow-camera-left={-30}
+          shadow-camera-right={30}
+          shadow-camera-top={30}
+          shadow-camera-bottom={-30}
+        />
+        <directionalLight
+          position={[-20, 20, -20]}
+          color="#3b82f6"
+          intensity={0.3}
+        />
+
+        <Ground bounds={bounds} />
+
+        {relationships
+          .filter((r) => buildingPositions.has(r.source) && buildingPositions.has(r.target))
+          .map((rel, idx) => {
+            const sourcePos = buildingPositions.get(rel.source)!;
+            const targetPos = buildingPositions.get(rel.target)!;
+            const sourceModule = modules.find((m) => m.id === rel.source);
+            const sourceCategory = sourceModule ? inferCategory(sourceModule) : "other";
+            const isSelectedSource = rel.source === selectedModuleId;
+            const isSelectedTarget = rel.target === selectedModuleId;
+            const isHighlighted = isSelectedSource || isSelectedTarget;
+            const isActive = relatedModules.has(rel.source) || relatedModules.has(rel.target);
+
+            return (
+              <Road
+                key={`road-${idx}`}
+                source={sourcePos}
+                target={targetPos}
+                color={CATEGORY_COLORS[sourceCategory]}
+                isActive={isActive || isHighlighted}
+                isHighlighted={isHighlighted}
+                label={rel.type}
+              />
+            );
+          })}
+
+        {modules.map((module) => {
+          const pos = buildingPositions.get(module.id)!;
+          const category = inferCategory(module);
+          const isSelected = module.id === selectedModuleId;
+          const isHovered = module.id === hoveredModuleId;
+          const isConnected = relatedModules.has(module.id);
+
+          return (
+            <Building
+              key={module.id}
+              module={module}
+              position={pos}
+              category={category}
+              isSelected={isSelected}
+              isHovered={isHovered}
+              isConnected={isConnected}
+              onClick={() => handleBuildingClick(module.id)}
+              onHover={handleBuildingHover}
+            />
+          );
+        )}
+
+        <CameraControls onResetView={resetView} onFitView={fitView} />
+      </Canvas>
+    </>
+  );
+}
+
+export function ArchitectureMap3D({ analysis, selectedModuleId, onModuleSelect }: ArchitectureMap3DProps) {
+  return (
+    <section aria-labelledby="architecture-heading" className="space-y-4">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 id="architecture-heading" className="text-lg font-semibold text-white flex items-center gap-2">
+            <Layers className="w-5 h-5 text-primary-400" />
+            Architecture Map
+          </h2>
+          <p className="mt-1 text-sm text-neutral-500">
+            AI-generated 3D repository structure · {analysis.modules.length} modules · {analysis.relationships.length} relationships
+          </p>
+        </div>
+      </header>
+
+      <div
+        className="relative w-full h-[520px] rounded-xl border border-neutral-800/50 bg-gradient-to-br from-neutral-950/80 to-neutral-900/90 overflow-hidden shadow-[0_4px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.02)]"
+        role="application"
+        aria-label="3D Architecture map showing module relationships"
+      >
+        <Suspense fallback={
+          <div className="w-full h-full flex items-center justify-center text-neutral-500">
+            Loading 3D map...
+          </div>
+        }>
+          <ArchitectureMap3DInner
+            analysis={analysis}
+            selectedModuleId={selectedModuleId}
+            onModuleSelect={onModuleSelect}
+          />
+        </Suspense>
+      </div>
+    </section>
+  );
+}

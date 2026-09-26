@@ -1,15 +1,17 @@
-export interface RepositoryMeta {
-  name: string;
-  url: string;
-  branch: string;
-  commitSha: string;
-  analyzedAt: string;
-}
-
-export interface ModuleFile {
-  path: string;
-  language: string;
-  size: number;
+export interface RepoMapAnalysis {
+  projectSummary: string;
+  stack: string[];
+  modules: Module[];
+  recommendedFiles: RecommendedFile[];
+  gotchas: (string | Gotcha)[];
+  relationships: Relationship[];
+  provenance?: {
+    provider: "bob-2.0" | "mock";
+    bobTaskId: string | null;
+    generatedAt: string;
+    durationMs: number;
+    notice: string | null;
+  };
 }
 
 export interface Module {
@@ -17,9 +19,15 @@ export interface Module {
   name: string;
   path: string;
   purpose: string;
-  files: ModuleFile[];
+  files: (string | ModuleFile)[];
   dependencies: string[];
   bobExplanation?: string;
+}
+
+export interface ModuleFile {
+  path: string;
+  language?: string;
+  size?: number;
 }
 
 export interface RecommendedFile {
@@ -39,11 +47,17 @@ export interface Gotcha {
 export interface Relationship {
   source: string;
   target: string;
-  type: "imports" | "calls" | "extends" | "uses";
+  type: string;
 }
 
 export interface OnboardingMapData {
-  repository: RepositoryMeta;
+  repository: {
+    name: string;
+    url: string;
+    branch: string;
+    commitSha: string;
+    analyzedAt: string;
+  };
   projectSummary: string;
   stack: string[];
   modules: Module[];

@@ -55,11 +55,25 @@ export function describeProviderReadiness(): ProviderReadiness {
 export async function getBobProviderFor(
   repository: RepositoryRef,
 ): Promise<BobProvider> {
+  const readiness = describeProviderReadiness();
+
+  // Development logging
+  if (process.env.NODE_ENV === "development") {
+    console.log("[RepoMap] Provider selection", {
+      repositoryUrl: repository.url,
+      configuredProvider: env.REPOMAP_PROVIDER,
+      selectedProvider: readiness.provider,
+      ready: readiness.ready,
+      reason: readiness.reason,
+      binary: readiness.binary,
+      apiKeyPresent: readiness.apiKeyPresent,
+    });
+  }
+
   if (env.REPOMAP_PROVIDER !== "bob-2.0") {
     return createMockBobProvider();
   }
 
-  const readiness = describeProviderReadiness();
   if (!readiness.ready) {
     throw new BobProviderError(
       readiness.reason ?? "IBM Bob 2.0 is not ready. Check BOB_API_KEY and BOB_CLI_PATH.",
@@ -67,5 +81,14 @@ export async function getBobProviderFor(
   }
 
   const workspace = await resolveWorkspace(repository);
+  
+  // Development logging
+  if (process.env.NODE_ENV === "development") {
+    console.log("[RepoMap] Workspace resolved", {
+      repositoryUrl: repository.url,
+      workspace,
+    });
+  }
+
   return createCliBobProvider({ workspace });
 }

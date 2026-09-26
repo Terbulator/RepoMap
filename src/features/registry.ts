@@ -4,7 +4,7 @@
  * Status is intentionally explicit: nothing in this table is implemented yet.
  * Tier references point at sections of docs/RepoMap-PRD.txt.
  */
-export type ModuleStatus = "not-implemented";
+export type ModuleStatus = "implemented" | "not-implemented";
 
 export type ProductModule = {
   id: string;
@@ -32,7 +32,7 @@ export const productModules: ProductModule[] = [
     tier: 1,
     summary:
       "Turns a free-text feature request into risk analysis, clarifying questions, and a drafted reply.",
-    status: "not-implemented",
+    status: "implemented",
   },
   {
     id: "debug-overlay",

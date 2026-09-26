@@ -63,6 +63,8 @@ export function ScopeShield() {
   const repositoryContext = useMemo(() => toRepositoryContext(repoMap), [repoMap]);
   const hasRepository = repoMap !== null;
 
+  const [fellBackToMock, setFellBackToMock] = useState(false);
+
   const isLoading = viewState === "loading";
   const isEmpty = text.trim().length === 0;
 
@@ -86,10 +88,12 @@ export function ScopeShield() {
 
     if (outcome.status === "error") {
       setErrorMessage(outcome.message || ANALYSIS_ERROR_MESSAGE);
+      setFellBackToMock(outcome.fellBackToMock);
       setViewState("error");
       return;
     }
 
+    setFellBackToMock(false);
     setResult(outcome.result);
     setViewState("success");
   }
@@ -208,10 +212,17 @@ export function ScopeShield() {
           <p className="font-semibold text-rose-800 dark:text-rose-200">
             {errorMessage}
           </p>
-          <p className="mt-1 text-rose-700/90 dark:text-rose-300/90">
-            The request is still saved. Retry, or edit the request to clear this
-            message.
-          </p>
+          {fellBackToMock ? (
+            <p className="mt-1 text-xs text-rose-700/90 dark:text-rose-300/90">
+              Live IBM Bob 2.0 was unavailable; the deterministic mock analysis
+              was used as a fallback and also returned an error for this request.
+            </p>
+          ) : (
+            <p className="mt-1 text-rose-700/90 dark:text-rose-300/90">
+              The request is still saved. Retry, or edit the request to clear this
+              message.
+            </p>
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -263,7 +274,7 @@ export function ScopeShield() {
             grounding={result.grounding}
           />
 
-          <DraftedReplyView key={result.draft} draft={result.draft} />
+          <DraftedReplyView key={result.draft} draft={result.draft} source={result.source} />
         </>
       ) : null}
     </section>

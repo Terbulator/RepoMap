@@ -36,7 +36,11 @@ export function findSignal(keywords: string[], text: string): string {
       if (spaced.includes(keyword)) return keyword;
       continue;
     }
-    if (parts.some((part) => part.startsWith(keyword))) return keyword;
+    for (const part of parts) {
+      if (part.startsWith(keyword)) {
+        return keyword;
+      }
+    }
   }
 
   return "";

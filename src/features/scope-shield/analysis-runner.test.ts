@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   ANALYSIS_ERROR_MESSAGE,
+  DEFAULT_BOB_TIMEOUT_MS,
   INVALID_REQUEST_MESSAGE,
   NETWORK_ERROR_MESSAGE,
   NO_REPOSITORY_MESSAGE,
@@ -166,4 +167,8 @@ test("stored repo map data is re-validated rather than trusted", () => {
     parseStoredRepoMap(JSON.stringify(REPO_MAP_FIXTURE)),
     REPO_MAP_FIXTURE,
   );
+});
+
+test("the Bob scope timeout constant defaults to 15s", () => {
+  assert.equal(DEFAULT_BOB_TIMEOUT_MS, 15_000);
 });
