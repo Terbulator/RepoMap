@@ -9,10 +9,11 @@
  *  2. Triggers — keyword rules that add a single specific item per layer.
  *  3. Baseline — items that are unspoken for almost any feature request.
  *
- * No AI is consulted. Stage 3 replaces `analyzeFeatureRequest` with the IBM Bob
- * 2.0 provider; the returned `RiskAnalysis` shape is the contract that call must
- * satisfy.
+ * No AI is consulted. A real provider replaces `analyzeFeatureRequest`; the
+ * returned `RiskAnalysis` shape is the contract that call must satisfy.
  */
+
+import { findSignal, matchesAny } from "@/features/scope-shield/keyword-match";
 
 export type RiskLevel = "HIGH" | "MEDIUM" | "LOW";
 
@@ -435,7 +436,7 @@ function riskLevelFor(signalCount: number): RiskLevel {
 }
 
 function firstMatch(keywords: string[], text: string): string {
-  return keywords.find((keyword) => text.includes(keyword)) ?? "";
+  return findSignal(keywords, text);
 }
 
 /**
@@ -447,9 +448,10 @@ function firstMatch(keywords: string[], text: string): string {
 export function analyzeFeatureRequest(request: string): RiskAnalysis {
   const text = request.toLowerCase();
 
-  const matchedPresets = PRESETS.filter((preset) =>
-    preset.keywords.some((keyword) => text.includes(keyword)),
-  ).slice(0, 2);
+  const matchedPresets = PRESETS.filter((preset) => matchesAny(preset.keywords, text)).slice(
+    0,
+    2,
+  );
 
   const domains: DomainRisk[] = DOMAIN_ORDER.map((id) => {
     const items: RiskItem[] = [];
