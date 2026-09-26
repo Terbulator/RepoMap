@@ -1,20 +1,20 @@
-import type { BobAnalysis } from "@/features/repomap/schema";
+import type { ProviderAnalysis } from "@/features/repomap/schema.ts";
 
 /**
- * Thin seam in front of IBM Bob 2.0.
+ * Thin seam in front of the analysis providers.
  *
  * PRD §7 requires every module's output to be traceable to a specific Bob
  * task/session, so a provider always reports the task id it ran under when the
- * service exposes one.
+ * tool exposes one.
  */
-export type BobProviderName = "bob-2.0" | "stub";
+export type BobProviderName = "bob-2.0" | "mock";
 
 export type BobTaskTrace = {
   taskId: string | null;
   model: string | null;
 };
 
-export type RepositoryAnalysis = BobAnalysis & {
+export type RepositoryAnalysis = ProviderAnalysis & {
   trace: BobTaskTrace;
 };
 

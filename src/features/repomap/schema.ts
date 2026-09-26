@@ -1,112 +1,143 @@
 import { z } from "zod";
 
 /**
- * RepoMap data contract (PRD 5.1 / FR-2, FR-3, FR-4, FR-5).
+ * The RepoMap contract (PRD 5.1, FR-2 to FR-5).
  *
- * The `repoMapSchema` below is the strict contract the rest of the app can rely
- * on. The looser `bobAnalysisSchema` is what we ask IBM Bob 2.0 to produce;
- * `toRepoMap` normalises one into the other so a slightly-off model response
- * degrades instead of failing the request.
+ * This is the only shape the frontend consumes. Raw IBM Bob 2.0 output never
+ * leaves the server: `src/features/repomap/normalize.ts` converts it into this
+ * contract, so the Onboarding Map and ScopeShield can be built against a stable
+ * interface while Bob's output changes underneath.
  */
-
-export const repoMapNodeSchema = z.object({
-  id: z.string().min(1),
-  label: z.string().min(1),
-  kind: z.enum(["module", "file"]),
-  path: z.string().min(1),
-});
-
-export const repoMapEdgeSchema = z.object({
-  id: z.string().min(1),
-  source: z.string().min(1),
-  target: z.string().min(1),
-  relation: z.enum(["contains", "imports", "depends-on"]),
-});
 
 export const repoMapModuleSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   path: z.string().min(1),
-  responsibility: z.string().min(1),
-  entryPoints: z.array(z.string().min(1)).default([]),
-  dependsOn: z.array(z.string().min(1)).default([]),
+  purpose: z.string().min(1),
+  files: z.array(z.string().min(1)).default([]),
+  dependencies: z.array(z.string().min(1)).default([]),
 });
 
 export const recommendedFileSchema = z.object({
-  rank: z.number().int().min(1).max(3),
   path: z.string().min(1),
-  why: z.string().min(1),
+  reason: z.string().min(1),
+  rank: z.number().int().min(1).max(3),
 });
 
-export const gotchaSchema = z.object({
-  title: z.string().min(1),
-  detail: z.string().min(1),
+export const relationshipSchema = z.object({
+  source: z.string().min(1),
+  target: z.string().min(1),
+  type: z.string().min(1),
 });
 
 /**
- * Provenance for PRD §7 "transparency of AI involvement": which provider
- * produced this map and which Bob 2.0 task/session it can be traced back to.
+ * PRD §7 "transparency of AI involvement": who produced this map, and which
+ * Bob task it can be traced back to. `provider: "mock"` is always development
+ * data, never a real analysis.
  */
-export const repoMapProvenanceSchema = z.object({
-  provider: z.enum(["bob-2.0", "stub"]),
+export const provenanceSchema = z.object({
+  provider: z.enum(["bob-2.0", "mock"]),
   bobTaskId: z.string().min(1).nullable(),
-  model: z.string().min(1).nullable(),
-  requestedAt: z.string().min(1),
-  completedAt: z.string().min(1),
+  generatedAt: z.string().min(1),
   durationMs: z.number().int().nonnegative(),
+  notice: z.string().min(1).nullable(),
+});
+
+export const repositorySchema = z.object({
+  url: z.string().min(1),
+  slug: z.string().min(1),
+  name: z.string().min(1),
 });
 
 export const repoMapSchema = z.object({
   schemaVersion: z.literal(1),
-  repository: z.object({
-    url: z.string().min(1),
-    slug: z.string().min(1),
-    name: z.string().min(1),
-  }),
-  provenance: repoMapProvenanceSchema,
-  summary: z.string().min(1),
+  repository: repositorySchema,
+  provenance: provenanceSchema,
+  projectSummary: z.string().min(1),
   stack: z.array(z.string().min(1)).default([]),
   modules: z.array(repoMapModuleSchema).min(1),
   recommendedFiles: z.array(recommendedFileSchema).min(1).max(3),
-  diagram: z.object({
-    nodes: z.array(repoMapNodeSchema),
-    edges: z.array(repoMapEdgeSchema),
-  }),
-  gotchas: z.array(gotchaSchema).default([]),
+  gotchas: z.array(z.string().min(1)).default([]),
+  relationships: z.array(relationshipSchema).default([]),
 });
 
 export type RepoMap = z.infer<typeof repoMapSchema>;
 export type RepoMapModule = z.infer<typeof repoMapModuleSchema>;
-export type RepoMapNode = z.infer<typeof repoMapNodeSchema>;
-export type RepoMapEdge = z.infer<typeof repoMapEdgeSchema>;
-export type RepoMapProvenance = z.infer<typeof repoMapProvenanceSchema>;
+export type RecommendedFile = z.infer<typeof recommendedFileSchema>;
+export type Relationship = z.infer<typeof relationshipSchema>;
+export type Provenance = z.infer<typeof provenanceSchema>;
+export type RepositoryRef = z.infer<typeof repositorySchema>;
 
-/** Shape we request from IBM Bob 2.0. Every field is optional-ish on purpose. */
-export const bobAnalysisSchema = z.object({
-  summary: z.string().default(""),
-  stack: z.array(z.string()).default([]),
+/** API envelope: POST /api/repository/analyze */
+export const analyzeResponseSchema = z.object({
+  success: z.literal(true),
+  analysis: repoMapSchema,
+});
+
+export const analyzeErrorResponseSchema = z.object({
+  success: z.literal(false),
+  error: z.object({
+    code: z.enum([
+      "INVALID_REQUEST",
+      "INVALID_REPOSITORY",
+      "PROVIDER_UNAVAILABLE",
+      "PROVIDER_FAILED",
+      "INVALID_ANALYSIS",
+      "INTERNAL_ERROR",
+    ]),
+    message: z.string().min(1),
+  }),
+});
+
+export type AnalyzeResponse = z.infer<typeof analyzeResponseSchema>;
+export type AnalyzeErrorResponse = z.infer<typeof analyzeErrorResponseSchema>;
+
+/**
+ * Loosest shape accepted from a provider before normalisation: every field is
+ * optional so a partial Bob answer is normalised rather than rejected outright.
+ */
+export const providerAnalysisSchema = z.object({
+  projectSummary: z.string().optional(),
+  summary: z.string().optional(),
+  stack: z.array(z.string()).optional(),
   modules: z
     .array(
       z.object({
-        name: z.string().default(""),
-        path: z.string().default(""),
-        responsibility: z.string().default(""),
-        entryPoints: z.array(z.string()).default([]),
-        dependsOn: z.array(z.string()).default([]),
+        id: z.string().optional(),
+        name: z.string().optional(),
+        path: z.string().optional(),
+        purpose: z.string().optional(),
+        responsibility: z.string().optional(),
+        files: z.array(z.string()).optional(),
+        entryPoints: z.array(z.string()).optional(),
+        dependencies: z.array(z.string()).optional(),
+        dependsOn: z.array(z.string()).optional(),
       }),
     )
-    .default([]),
+    .optional(),
   recommendedFiles: z
     .array(
       z.object({
-        path: z.string().default(""),
-        why: z.string().default(""),
+        path: z.string().optional(),
+        reason: z.string().optional(),
+        why: z.string().optional(),
+        rank: z.number().optional(),
       }),
     )
-    .default([]),
+    .optional(),
   gotchas: z
-    .array(z.object({ title: z.string().default(""), detail: z.string().default("") }))
-    .default([]),
+    .array(z.union([z.string(), z.object({ title: z.string().optional(), detail: z.string().optional() })]))
+    .optional(),
+  relationships: z
+    .array(
+      z.object({
+        source: z.string().optional(),
+        target: z.string().optional(),
+        type: z.string().optional(),
+        relation: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
-export type BobAnalysis = z.infer<typeof bobAnalysisSchema>;
+export type ProviderAnalysis = z.infer<typeof providerAnalysisSchema>;
