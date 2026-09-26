@@ -6,6 +6,13 @@ import { z } from "zod";
  * REPOMAP_PROVIDER picks the analysis provider: "mock" (default, checked-in
  * fixture) or "bob-2.0" (the installed IBM Bob CLI). There is no invented Bob
  * HTTP endpoint here on purpose — the CLI is the verified integration path.
+ *
+ * `env` is intentionally a getter rather than a module-level constant so that
+ * it always reflects `process.env` at call time. This prevents the common
+ * Next.js pitfall where a module is imported before `.env.local` is applied
+ * (e.g. during HMR or build-time static analysis), which would otherwise freeze
+ * REPOMAP_PROVIDER as "mock" for the lifetime of the module cache even after the
+ * server is restarted with the correct environment.
  */
 const serverEnvSchema = z.object({
   REPOMAP_PROVIDER: z.enum(["mock", "bob-2.0"]).default("mock"),

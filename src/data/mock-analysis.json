@@ -1,77 +1,187 @@
 {
-  "projectSummary": "Mock fixture for RepoMap development. This is a small demo service used to exercise the Onboarding Map UI without calling IBM Bob 2.0: a tiny HTTP API with one web tier, one domain module and one shared module.",
-  "stack": ["TypeScript", "Node.js", "Express", "Vitest", "Docker"],
+  "projectSummary": "RepoMap is a developer onboarding and code intelligence tool that transforms any GitHub repository into an interactive, living map. It uses IBM Bob 2.0 to analyze the full repository context and generates a visual architecture diagram, plain-English module breakdowns, ranked starter files, and common gotchas — helping new developers become productive in unfamiliar codebases within minutes instead of days.",
+  "stack": [
+    "Next.js 16 (App Router)",
+    "React 19",
+    "TypeScript 5",
+    "Tailwind CSS 4",
+    "React Flow (@xyflow/react)",
+    "IBM Bob 2.0 SDK"
+  ],
   "modules": [
     {
-      "id": "src-web",
-      "name": "web",
-      "path": "src/web",
-      "purpose": "Starts the HTTP server, wires routes and renders the demo HTML page.",
-      "files": ["src/web/server.ts", "src/web/routes.ts"],
-      "dependencies": ["src-core"]
+      "id": "repo-ingestion",
+      "name": "Repository Ingestion",
+      "path": "src/server/bob",
+      "purpose": "Handles cloning and ingesting target repositories into Bob 2.0's context. Provides workspace management, file filtering, and session orchestration for Bob's analysis tasks.",
+      "files": [
+        "src/server/bob/workspace.ts",
+        "src/server/bob/cli-provider.ts",
+        "src/server/bob/mock-provider.ts",
+        "src/server/bob/provider.ts"
+      ],
+      "dependencies": [
+        "IBM Bob 2.0 SDK",
+        "Node.js fs/promises",
+        "simple-git"
+      ]
     },
     {
-      "id": "src-core",
-      "name": "core",
-      "path": "src/core",
-      "purpose": "Holds the domain logic: the catalogue, pricing rules and validation.",
-      "files": ["src/core/catalogue.ts", "src/core/pricing.ts"],
-      "dependencies": []
+      "id": "repo-analysis",
+      "name": "Repository Analysis",
+      "path": "src/server/repomap",
+      "purpose": "Orchestrates Bob 2.0 to perform full-repository analysis. Generates the structured RepoMap output including project summary, module breakdown, file relationships, and gotchas.",
+      "files": [
+        "src/server/repomap/analyze-repository.ts"
+      ],
+      "dependencies": [
+        "Repository Ingestion",
+        "IBM Bob 2.0 SDK",
+        "Zod (schema validation)"
+      ]
     },
     {
-      "id": "src-shared",
-      "name": "shared",
-      "path": "src/shared",
-      "purpose": "Shared helpers and error types used by every other module.",
-      "files": ["src/shared/errors.ts", "src/shared/logger.ts"],
-      "dependencies": []
+      "id": "onboarding-map",
+      "name": "Onboarding Map (Frontend)",
+      "path": "src/components/onboarding",
+      "purpose": "Renders the interactive onboarding dashboard: architecture graph, module cards, recommended files, gotchas, and module detail drawer. Consumes the RepoMap analysis contract and presents it as a polished developer tool.",
+      "files": [
+        "src/components/onboarding/OnboardingMap.tsx",
+        "src/components/onboarding/ArchitectureDiagram.tsx",
+        "src/components/onboarding/ModuleCards.tsx",
+        "src/components/onboarding/RecommendedFiles.tsx",
+        "src/components/onboarding/Gotchas.tsx",
+        "src/components/onboarding/ModuleDetailDrawer.tsx",
+        "src/components/onboarding/ProjectSummary.tsx"
+      ],
+      "dependencies": [
+        "React Flow (@xyflow/react)",
+        "lucide-react",
+        "Tailwind CSS",
+        "RepoMap Analysis Types"
+      ]
     },
     {
-      "id": "tests",
-      "name": "tests",
-      "path": "tests",
-      "purpose": "Integration and unit tests; the only place that exercises the whole request path.",
-      "files": ["tests/api.test.ts", "tests/pricing.test.ts"],
-      "dependencies": ["src-web"]
+      "id": "scope-shield",
+      "name": "ScopeShield (Scope Clarifier)",
+      "path": "src/features/scope-shield",
+      "purpose": "Accepts free-text feature requests and returns risk analysis, clarifying questions, and a drafted professional reply — all grounded in the repository's actual stack and architecture from the Onboarding Map analysis.",
+      "files": [
+        "src/features/scope-shield/scope-shield.tsx",
+        "src/features/scope-shield/risk-analysis.ts",
+        "src/features/scope-shield/clarifying-questions.ts",
+        "src/features/scope-shield/drafted-reply.ts",
+        "src/features/scope-shield/feature-request.ts",
+        "src/features/scope-shield/keyword-match.ts",
+        "src/features/scope-shield/stack-context.ts",
+        "src/features/scope-shield/repository-context.ts"
+      ],
+      "dependencies": [
+        "Onboarding Map (for repo context)",
+        "IBM Bob 2.0 SDK",
+        "Zod (schema validation)"
+      ]
+    },
+    {
+      "id": "api-routes",
+      "name": "API Routes",
+      "path": "src/app/api",
+      "purpose": "Thin backend layer that exposes Bob 2.0 capabilities via Next.js API routes. Handles repository ingestion, analysis triggering, and ScopeShield requests.",
+      "files": [
+        "src/app/api/health/route.ts",
+        "src/app/api/repomap/route.ts",
+        "src/app/api/repository/analyze/route.ts",
+        "src/app/api/onboarding/route.ts"
+      ],
+      "dependencies": [
+        "Next.js 16 App Router",
+        "Repository Ingestion",
+        "Repository Analysis",
+        "ScopeShield"
+      ]
+    },
+    {
+      "id": "shared-types",
+      "name": "Shared Types & Schemas",
+      "path": "src/types / src/features/repomap",
+      "purpose": "Defines the canonical RepoMap analysis contract (projectSummary, stack, modules, recommendedFiles, gotchas, relationships) and Zod schemas for validation. Shared between backend (Bob output parsing) and frontend (UI consumption).",
+      "files": [
+        "src/types/onboarding.ts",
+        "src/features/repomap/schema.ts",
+        "src/features/repomap/normalize.ts",
+        "src/features/repomap/request.ts"
+      ],
+      "dependencies": [
+        "Zod",
+        "TypeScript"
+      ]
     }
   ],
   "recommendedFiles": [
     {
-      "path": "README.md",
-      "reason": "Explains how to install and run the demo service.",
+      "path": "src/components/onboarding/OnboardingMap.tsx",
+      "reason": "Main entry point for the Onboarding Map dashboard. Composes all sections (architecture graph, module breakdown, recommended files, gotchas) and manages module selection state.",
       "rank": 1
     },
     {
-      "path": "src/web/server.ts",
-      "reason": "Entry point of the service and the first file to read.",
+      "path": "src/components/onboarding/ArchitectureDiagram.tsx",
+      "reason": "Core visualization component using React Flow. Renders modules as nodes and relationships as edges with zoom/pan/fit controls. Click handlers drive the module detail drawer.",
       "rank": 2
     },
     {
-      "path": "src/core/catalogue.ts",
-      "reason": "The domain model everything else is built around.",
+      "path": "src/server/repomap/analyze-repository.ts",
+      "reason": "Orchestrates Bob 2.0 to produce the full RepoMap analysis. Understanding this shows how the analysis contract is generated from raw repository content.",
       "rank": 3
     }
   ],
   "gotchas": [
-    "The demo service reads PORT from the environment and defaults to 3000, which collides with the RepoMap frontend during the demo.",
-    "tests/api.test.ts starts a real server on a fixed port, so it fails if another instance is already running.",
-    "src/shared/logger.ts writes to stdout in plain text, so log parsing in the demo needs a prefix filter."
+    "The architecture graph derives nodes from modules[] and edges from relationships[] — both must be present and consistent for the diagram to render correctly.",
+    "Module IDs in relationships must exactly match module IDs in modules[] array, otherwise edges will not connect to visible nodes.",
+    "Bob 2.0 analysis output is non-deterministic; the normalize.ts pipeline validates and coerces output into the strict RepoMap contract before the UI consumes it.",
+    "React Flow requires explicit width/height on its container; the ArchitectureDiagram uses a resize observer to fill its parent card responsively.",
+    "The mock analysis fixture (src/data/mock-analysis.json) is used for development and demo; production data comes from the /api/onboarding endpoint after Bob completes analysis.",
+    "ScopeShield depends on the Onboarding Map's analysis output — if no repository has been analyzed, ScopeShield falls back to generic stack-agnostic responses."
   ],
   "relationships": [
     {
-      "source": "src-web",
-      "target": "src-core",
-      "type": "depends-on"
+      "source": "repo-ingestion",
+      "target": "repo-analysis",
+      "type": "provides-context"
     },
     {
-      "source": "src-web",
-      "target": "src-shared",
-      "type": "depends-on"
+      "source": "repo-analysis",
+      "target": "shared-types",
+      "type": "produces-contract"
     },
     {
-      "source": "tests",
-      "target": "src-web",
-      "type": "depends-on"
+      "source": "shared-types",
+      "target": "onboarding-map",
+      "type": "consumes-contract"
+    },
+    {
+      "source": "shared-types",
+      "target": "scope-shield",
+      "type": "consumes-contract"
+    },
+    {
+      "source": "onboarding-map",
+      "target": "api-routes",
+      "type": "fetches-from"
+    },
+    {
+      "source": "scope-shield",
+      "target": "api-routes",
+      "type": "fetches-from"
+    },
+    {
+      "source": "api-routes",
+      "target": "repo-ingestion",
+      "type": "calls"
+    },
+    {
+      "source": "api-routes",
+      "target": "repo-analysis",
+      "type": "calls"
     }
   ]
 }
