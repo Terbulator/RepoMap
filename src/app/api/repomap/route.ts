@@ -1,10 +1,9 @@
-import { NextResponse } from "next/server";
+/**
+ * Alias kept for the endpoint name used before M1 settled on
+ * /api/repository/analyze. Same handler, same contract — the canonical route is
+ * src/app/api/repository/analyze/route.ts.
+ */
+export { POST } from "@/app/api/repository/analyze/route.ts";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-export async function GET() {
-  return NextResponse.json({
-    status: "ok",
-    message: "RepoMap analysis endpoint. Use POST to trigger analysis.",
-  });
-}

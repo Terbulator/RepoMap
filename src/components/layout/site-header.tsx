@@ -17,6 +17,12 @@ export function SiteHeader() {
           >
             Dashboard
           </Link>
+          <Link
+            href="/scope-shield"
+            className="hover:text-neutral-900 dark:hover:text-white"
+          >
+            ScopeShield
+          </Link>
         </nav>
       </div>
     </header>

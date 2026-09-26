@@ -1,6 +1,6 @@
 "use client";
 
-import { RepoMapAnalysis } from "@/types/onboarding";
+import { RepoMapAnalysis, ModuleFile } from "@/types/onboarding";
 import { getModuleById, getRelatedModules } from "./common";
 import { X } from "lucide-react";
 
@@ -8,6 +8,10 @@ interface ModuleDetailDrawerProps {
   analysis: RepoMapAnalysis;
   selectedModuleId: string | null;
   onClose: () => void;
+}
+
+function getFilePath(file: string | ModuleFile): string {
+  return typeof file === "string" ? file : file.path;
 }
 
 export function ModuleDetailDrawer({ analysis, selectedModuleId, onClose }: ModuleDetailDrawerProps) {
@@ -51,7 +55,7 @@ export function ModuleDetailDrawer({ analysis, selectedModuleId, onClose }: Modu
               {selectedModule.files.map((file, index) => (
                 <div key={index} className="flex items-center gap-2 p-2 bg-neutral-900 border border-neutral-800 rounded text-sm">
                   <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-xs text-neutral-500 bg-neutral-800 rounded">{index + 1}</span>
-                  <code className="font-mono text-neutral-300 truncate flex-1">{file}</code>
+                  <code className="font-mono text-neutral-300 truncate flex-1">{getFilePath(file)}</code>
                 </div>
               ))}
             </div>

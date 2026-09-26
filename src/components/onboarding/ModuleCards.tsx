@@ -1,12 +1,16 @@
 "use client";
 
-import { RepoMapAnalysis } from "@/types/onboarding";
+import { RepoMapAnalysis, ModuleFile } from "@/types/onboarding";
 import { getRelatedModules } from "./common";
 
 interface ModuleCardsProps {
   analysis: RepoMapAnalysis;
   selectedModuleId: string | null;
   onModuleSelect: (moduleId: string | null) => void;
+}
+
+function getFilePath(file: string | ModuleFile): string {
+  return typeof file === "string" ? file : file.path;
 }
 
 export function ModuleCards({ analysis, selectedModuleId, onModuleSelect }: ModuleCardsProps) {
@@ -60,7 +64,7 @@ export function ModuleCards({ analysis, selectedModuleId, onModuleSelect }: Modu
                     className="px-2 py-0.5 text-xs font-mono bg-neutral-800 border border-neutral-700 rounded text-neutral-300 truncate max-w-[120px]"
                     role="listitem"
                   >
-                    {file}
+                    {getFilePath(file)}
                   </span>
                 ))}
                 {module.files.length > 3 && (
