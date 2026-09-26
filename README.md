@@ -134,6 +134,83 @@ Failure:
 }
 ```
 
+## ScopeShield — Stages 1–4 (input, risk analysis, questions, drafted reply)
+
+`/scope-shield` takes a free-text feature request, trims and squeezes the
+whitespace, and stores the result in the browser under the localStorage key
+`featureRequest`. Empty input is rejected with "Please describe the feature you
+want to build." A successful submit shows "Feature request stored successfully!"
+and logs the request to the browser console. The stored value is also printed
+with `localStorage.getItem("featureRequest")` in DevTools → Application → Local
+Storage.
+
+Stage 2 adds a **mock** hidden-scope analysis below the input.
+`analyzeFeatureRequest` in `src/features/scope-shield/risk-analysis.ts` returns a
+risk level (HIGH/MEDIUM/LOW) and the work nobody asked for, grouped by
+architectural layer (frontend, backend, database, infrastructure, security &
+auth). It combines three deterministic sources:
+
+| Source | What it is | Example |
+| --- | --- | --- |
+| `preset` | Structured templates for the three common asks — "Add authentication", "Add payments", "Create user roles" | session lifecycle, idempotent charge flow, permission checks |
+| `trigger` | Keyword rules, max 2 per layer | `migration` → index and rollback plan, `middleware` → placement and ordering |
+| `baseline` | Unspoken for almost any request | empty/loading/error states, transaction boundaries, deploy order |
+
+The UI renders these in a "Hidden Scope & Unspoken Requirements" section: one
+amber-bordered card per layer, each item tagged with its layer, its concern tags
+(`migration`, `middleware`, `validation`, …) and where it came from.
+
+Stage 3 adds a **mock** "Clarifying Questions" section below the risk analysis.
+`generateClarifyingQuestions` in
+`src/features/scope-shield/clarifying-questions.ts` scores a pool of questions by
+keyword match, so the three or four returned follow the request: an
+authentication ask surfaces the multi-tenant role and session-lifetime
+questions, a payments ask surfaces reconciliation and provider-downtime
+questions. Each question carries the ambiguity it resolves and the layer it
+protects, can be ticked off in the UI, and the whole list is copyable with
+`formatQuestions` (the "Copy Questions" button).
+
+Stage 4 adds a **mock** "Drafted Professional Reply" below the questions.
+`detectStackContext` in `src/features/scope-shield/stack-context.ts` returns the
+stack the reply is grounded in (FR-7): a base project profile plus whatever the
+request implies (Stripe, Twilio, object storage, full-text search, …).
+`buildDraftedReply` in `src/features/scope-shield/drafted-reply.ts` stitches the
+request, that stack, the risk level, up to four detected hidden-scope items and
+the clarifying questions into an email-shaped message. The UI shows it in an
+editable textarea with "Copy Drafted Reply" and "Reset Draft".
+
+Every stage so far is a mock: the analysis, the questions and the draft are
+computed in the browser, deterministic, and consult no AI. The real IBM Bob 2.0
+provider replaces `analyzeFeatureRequest`, `generateClarifyingQuestions` and
+`buildDraftedReply`; the `RiskAnalysis`, `ClarifyingQuestion` and
+`StackContext` shapes are the contracts that call must satisfy. No auth,
+database, or Tier 2/3 work is in any of these stages.
+
+## IBM Bob 2.0 integration (M1 — CLI-based)
+
+`src/server/bob/` is the only place that talks to Bob 2.0:
+
+| File | Role |
+| --- | --- |
+| `provider.ts` | Provider interface + `BobProviderError` |
+| `mock-provider.ts` | Deterministic fixture for local development |
+| `cli-provider.ts` | Runs `bob run --format json …` via `execFile` |
+| `output.ts` | Parses Bob's `--format json` output (document, stream, fence or prose) |
+| `prompts.ts` | The single analysis prompt, derived from PRD 5.1 |
+| `workspace.ts` | Resolves the local directory Bob reads (shallow clone or fixed checkout) |
+| `index.ts` | Provider resolution (`mock` | `bob-2.0`); no silent fallback |
+
+Two deliberate choices:
+
+- **No stub/fake provider.** An invented analysis would be indistinguishable
+  from a real one in the UI, which PRD §7 ("transparency of AI involvement")
+  rules out. Without credentials the API returns 503 rather than fake data.
+- **Normalisation, not trust.** `src/features/repomap/normalize.ts` converts
+  Bob's answer into the strict contract: capped at 3 recommended files, deduped
+  modules, derived diagram nodes/edges, dropped junk. It raises
+  `EmptyRepoMapAnalysisError` only when there is no usable map at all, rather
+  than inventing one.
+
 ## RepoMap contract
 
 ```ts
@@ -206,6 +283,46 @@ What is missing:
 Before the demo, someone must: set `BOB_API_KEY`, set `REPOMAP_PROVIDER=bob-2.0`,
 and re-run the verification above.
 
+## Project structure
+
+```
+docs/
+  RepoMap-PRD.txt        Product requirements (source of truth)
+src/
+  app/
+    layout.tsx           Root layout, header, footer
+    page.tsx             Landing page
+    dashboard/page.tsx   Dashboard shell (still empty)
+    scope-shield/page.tsx ScopeShield Stage 1 + 2 UI
+    api/health/route.ts  Health check route
+    api/repomap/route.ts POST /api/repomap — repo map generation (M1)
+  components/
+    layout/              Site header and footer
+  features/
+    registry.ts          Declares every PRD module, its tier, and status
+    repomap/
+      schema.ts          RepoMap + Bob analysis contracts (zod)
+      normalize.ts       Bob answer -> strict RepoMap, diagram derivation
+      request.ts         POST body contract
+    scope-shield/
+      feature-request.ts   Stage 1: localStorage key + text cleanup
+      scope-shield.tsx     Stage 1 + 2: input form, loading, result mount
+      risk-analysis.ts     Stage 2: mock hidden-scope detector + contract
+      risk-analysis-view.tsx Stage 2: risk badge, per-layer hidden-scope cards
+      clarifying-questions.ts Stage 3: mock question pool + formatter
+      clarifying-questions-view.tsx Stage 3: checklist + Copy Questions button
+      stack-context.ts     Stage 4: mock stack detection (FR-7 grounding)
+      drafted-reply.ts     Stage 4: mock reply composer
+      drafted-reply-view.tsx Stage 4: editable draft + copy/reset buttons
+  lib/
+    env.ts               Server-side env, validated with zod
+    repository-url.ts    Repository input parsing/canonicalisation
+    cn.ts                Class-name helper
+  server/
+    bob/                 The only code that talks to IBM Bob 2.0 (CLI-based)
+    repomap/analyze-repository.ts  M1 orchestration: Bob call -> RepoMap
+```
+
 ## Environment variables
 
 | Variable | Default | Purpose |
@@ -222,7 +339,7 @@ Windows note: `bob` is installed as an npm shim (`bob.cmd`/`bob.ps1`) which
 Node cannot spawn directly. Set:
 
 ```
-BOB_CLI_PATH=C:\Users\<you>\AppData\Roaming\npm\node_modules\bobshell\dist\bob.js
+BOB_CLI_PATH=<npm-global-dir>/node_modules/bobshell/dist/bob.js
 ```
 
 A `.js` path is executed through the current Node binary automatically.
