@@ -30,6 +30,12 @@ test("multi-word keywords still match literally", () => {
   assert.equal(findSignal(["third party", "api key"], "rotate the api key"), "api key");
 });
 
+test("hyphens and underscores read as spaces in multi-word keywords", () => {
+  assert.equal(findSignal(["sign in"], "add sign-in and sign-up"), "sign in");
+  assert.equal(findSignal(["api key"], "rotate the api_key"), "api key");
+  assert.equal(findSignal(["third party"], "a third-party vendor"), "third party");
+});
+
 test("returns the first keyword that matches", () => {
   assert.equal(
     findSignal(["payment", "pay"], "add payments with stripe"),
