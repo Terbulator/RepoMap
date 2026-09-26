@@ -13,7 +13,7 @@
  * returned `RiskAnalysis` shape is the contract that call must satisfy.
  */
 
-import { findSignal, matchesAny } from "@/features/scope-shield/keyword-match";
+import { findSignal, matchesAny } from "./keyword-match.ts";
 
 export type RiskLevel = "HIGH" | "MEDIUM" | "LOW";
 

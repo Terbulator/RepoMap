@@ -7,7 +7,7 @@
  * that the Section 5.1 repo-map analysis already produces server-side.
  */
 
-import { matchesAny } from "@/features/scope-shield/keyword-match";
+import { matchesAny } from "./keyword-match.ts";
 
 export type StackContext = {
   languages: string[];
