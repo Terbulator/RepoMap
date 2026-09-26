@@ -8,6 +8,7 @@
  */
 
 import type { DomainId } from "@/features/scope-shield/risk-analysis";
+import { findSignal } from "@/features/scope-shield/keyword-match";
 
 export type ClarifyingQuestion = {
   /** Stable id so React keys and the checklist state stay predictable. */
@@ -291,7 +292,7 @@ export function generateClarifyingQuestions(
   const maxCount = Math.max(limit, MIN_QUESTIONS);
 
   const scored = QUESTION_POOL.map((template, index) => {
-    const signal = template.keywords.find((keyword) => text.includes(keyword)) ?? "";
+    const signal = findSignal(template.keywords, text);
     const score = template.weight + (signal ? KEYWORD_HIT_SCORE : 0);
     return { template, index, signal, score };
   });

@@ -11,9 +11,12 @@ import {
 import type { ClarifyingQuestion } from "@/features/scope-shield/clarifying-questions";
 import { generateClarifyingQuestions } from "@/features/scope-shield/clarifying-questions";
 import { ClarifyingQuestionsView } from "@/features/scope-shield/clarifying-questions-view";
+import { buildDraftedReply } from "@/features/scope-shield/drafted-reply";
+import { DraftedReplyView } from "@/features/scope-shield/drafted-reply-view";
 import type { RiskAnalysis } from "@/features/scope-shield/risk-analysis";
 import { analyzeFeatureRequest } from "@/features/scope-shield/risk-analysis";
 import { RiskAnalysisView } from "@/features/scope-shield/risk-analysis-view";
+import { detectStackContext } from "@/features/scope-shield/stack-context";
 
 /** Fake latency so the loading state is visible. A real provider replaces this. */
 const MOCK_ANALYSIS_DELAY_MS = 900;
@@ -23,8 +26,8 @@ const MOCK_ANALYSIS_DELAY_MS = 900;
  *
  * Stage 1 captures the free-text feature request and stores it in localStorage
  * under "featureRequest". Stage 2 renders a MOCK risk analysis per technical
- * layer. Stage 3 adds the MOCK clarifying questions below it. No IBM Bob 2.0
- * call happens yet.
+ * layer, stage 3 the MOCK clarifying questions, stage 4 a MOCK drafted reply
+ * grounded in the MOCK stack context. No IBM Bob 2.0 call happens yet.
  */
 export function ScopeShield() {
   const [text, setText] = useState("");
@@ -34,6 +37,7 @@ export function ScopeShield() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<RiskAnalysis | null>(null);
   const [questions, setQuestions] = useState<ClarifyingQuestion[]>([]);
+  const [draft, setDraft] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -65,8 +69,19 @@ export function ScopeShield() {
 
     setIsAnalyzing(true);
     timer.current = setTimeout(() => {
-      setAnalysis(analyzeFeatureRequest(request));
-      setQuestions(generateClarifyingQuestions(request));
+      const nextAnalysis = analyzeFeatureRequest(request);
+      const nextQuestions = generateClarifyingQuestions(request);
+
+      setAnalysis(nextAnalysis);
+      setQuestions(nextQuestions);
+      setDraft(
+        buildDraftedReply({
+          request,
+          stack: detectStackContext(request),
+          analysis: nextAnalysis,
+          questions: nextQuestions,
+        }),
+      );
       setIsAnalyzing(false);
     }, MOCK_ANALYSIS_DELAY_MS);
   }
@@ -121,7 +136,8 @@ export function ScopeShield() {
             className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-400 border-t-transparent"
           />
           Reading the request for hidden work across backend, database,
-          frontend, infrastructure and security…
+          frontend, infrastructure and security, then drafting the questions and
+          the reply…
         </div>
       ) : null}
 
@@ -145,6 +161,10 @@ export function ScopeShield() {
 
       {questions.length > 0 && !isAnalyzing ? (
         <ClarifyingQuestionsView questions={questions} />
+      ) : null}
+
+      {draft && !isAnalyzing ? (
+        <DraftedReplyView key={draft} draft={draft} />
       ) : null}
     </section>
   );

@@ -103,7 +103,7 @@ nodes and edges onto React Flow when the UI work starts.
 
 Liveness plus whether Bob 2.0 is configured.
 
-## ScopeShield — Stages 1–3 (input, risk analysis, clarifying questions)
+## ScopeShield — Stages 1–4 (input, risk analysis, questions, drafted reply)
 
 `/scope-shield` takes a free-text feature request, trims and squeezes the
 whitespace, and stores the result in the browser under the localStorage key
@@ -139,11 +139,21 @@ questions. Each question carries the ambiguity it resolves and the layer it
 protects, can be ticked off in the UI, and the whole list is copyable with
 `formatQuestions` (the "Copy Questions" button).
 
-Every stage so far is a mock: the analysis and the questions are computed in the
-browser, deterministic, and consult no AI. The real IBM Bob 2.0 provider
-replaces `analyzeFeatureRequest` and `generateClarifyingQuestions`; the
-`RiskAnalysis` and `ClarifyingQuestion` shapes are the contracts that call must
-satisfy. No auth, database, or Tier 2/3 work is in any of these stages.
+Stage 4 adds a **mock** "Drafted Professional Reply" below the questions.
+`detectStackContext` in `src/features/scope-shield/stack-context.ts` returns the
+stack the reply is grounded in (FR-7): a base project profile plus whatever the
+request implies (Stripe, Twilio, object storage, full-text search, …).
+`buildDraftedReply` in `src/features/scope-shield/drafted-reply.ts` stitches the
+request, that stack, the risk level, up to four detected hidden-scope items and
+the clarifying questions into an email-shaped message. The UI shows it in an
+editable textarea with "Copy Drafted Reply" and "Reset Draft".
+
+Every stage so far is a mock: the analysis, the questions and the draft are
+computed in the browser, deterministic, and consult no AI. The real IBM Bob 2.0
+provider replaces `analyzeFeatureRequest`, `generateClarifyingQuestions` and
+`buildDraftedReply`; the `RiskAnalysis`, `ClarifyingQuestion` and
+`StackContext` shapes are the contracts that call must satisfy. No auth,
+database, or Tier 2/3 work is in any of these stages.
 
 ## IBM Bob 2.0 integration
 
@@ -206,6 +216,9 @@ src/
       risk-analysis-view.tsx Stage 2: risk badge, per-layer hidden-scope cards
       clarifying-questions.ts Stage 3: mock question pool + formatter
       clarifying-questions-view.tsx Stage 3: checklist + Copy Questions button
+      stack-context.ts     Stage 4: mock stack detection (FR-7 grounding)
+      drafted-reply.ts     Stage 4: mock reply composer
+      drafted-reply-view.tsx Stage 4: editable draft + copy/reset buttons
   lib/
     env.ts               Server-side env, validated with zod
     repository-url.ts    Repository input parsing/canonicalisation
