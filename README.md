@@ -113,13 +113,24 @@ and logs the request to the browser console. The stored value is also printed
 with `localStorage.getItem("featureRequest")` in DevTools → Application → Local
 Storage.
 
-Stage 2 adds a **mock** risk analysis below the input. `analyzeFeatureRequest`
-in `src/features/scope-shield/risk-analysis.ts` maps keywords in the request onto
-structured templates and returns a risk level (HIGH/MEDIUM/LOW) plus hidden work
-grouped by backend, database, frontend, infrastructure and security. It is
-deterministic and consults no AI; Stage 3 replaces it with the IBM Bob 2.0
-provider, and the returned `RiskAnalysis` shape is the contract that call must
-satisfy. No auth, database, or Tier 2/3 work is in either stage.
+Stage 2 adds a **mock** hidden-scope analysis below the input.
+`analyzeFeatureRequest` in `src/features/scope-shield/risk-analysis.ts` returns a
+risk level (HIGH/MEDIUM/LOW) and the work nobody asked for, grouped by
+architectural layer (frontend, backend, database, infrastructure, security &
+auth). It combines three deterministic sources:
+
+| Source | What it is | Example |
+| --- | --- | --- |
+| `preset` | Structured templates for the three common asks — "Add authentication", "Add payments", "Create user roles" | session lifecycle, idempotent charge flow, permission checks |
+| `trigger` | Keyword rules, max 2 per layer | `migration` → index and rollback plan, `middleware` → placement and ordering |
+| `baseline` | Unspoken for almost any request | empty/loading/error states, transaction boundaries, deploy order |
+
+The UI renders these in a "Hidden Scope & Unspoken Requirements" section: one
+amber-bordered card per layer, each item tagged with its layer, its concern tags
+(`migration`, `middleware`, `validation`, …) and where it came from. It consults
+no AI; Stage 3 replaces it with the IBM Bob 2.0 provider, and the returned
+`RiskAnalysis` shape is the contract that call must satisfy. No auth, database,
+or Tier 2/3 work is in either stage.
 
 ## IBM Bob 2.0 integration
 
@@ -178,8 +189,8 @@ src/
     scope-shield/
       feature-request.ts   Stage 1: localStorage key + text cleanup
       scope-shield.tsx     Stage 1 + 2: input form, loading, result mount
-      risk-analysis.ts     Stage 2: mock analysis generator + contract
-      risk-analysis-view.tsx Stage 2: risk badge and per-domain cards
+      risk-analysis.ts     Stage 2: mock hidden-scope detector + contract
+      risk-analysis-view.tsx Stage 2: risk badge, per-layer hidden-scope cards
   lib/
     env.ts               Server-side env, validated with zod
     repository-url.ts    Repository input parsing/canonicalisation
