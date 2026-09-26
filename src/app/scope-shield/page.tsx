@@ -12,8 +12,9 @@ export default function ScopeShieldPage() {
     <div className="mx-auto max-w-6xl px-6 py-10">
       <p className="border-b border-neutral-200 pb-6 text-sm text-neutral-600 dark:border-neutral-300 dark:border-neutral-800">
         Stage 1 — feature request input, stored in your browser. Stage 2 —
-        hidden scope and unspoken requirements per architectural layer. The
-        analysis is a mock template for now; no AI is called.
+        hidden scope and unspoken requirements per architectural layer. Stage 3
+        — clarifying questions to ask before code is written. Stages 2 and 3 are
+        mock templates computed in the browser; no AI is called.
       </p>
 
       <div className="mt-8">

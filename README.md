@@ -103,7 +103,7 @@ nodes and edges onto React Flow when the UI work starts.
 
 Liveness plus whether Bob 2.0 is configured.
 
-## ScopeShield — Stage 1 (feature request input) and Stage 2 (risk analysis)
+## ScopeShield — Stages 1–3 (input, risk analysis, clarifying questions)
 
 `/scope-shield` takes a free-text feature request, trims and squeezes the
 whitespace, and stores the result in the browser under the localStorage key
@@ -127,10 +127,23 @@ auth). It combines three deterministic sources:
 
 The UI renders these in a "Hidden Scope & Unspoken Requirements" section: one
 amber-bordered card per layer, each item tagged with its layer, its concern tags
-(`migration`, `middleware`, `validation`, …) and where it came from. It consults
-no AI; Stage 3 replaces it with the IBM Bob 2.0 provider, and the returned
-`RiskAnalysis` shape is the contract that call must satisfy. No auth, database,
-or Tier 2/3 work is in either stage.
+(`migration`, `middleware`, `validation`, …) and where it came from.
+
+Stage 3 adds a **mock** "Clarifying Questions" section below the risk analysis.
+`generateClarifyingQuestions` in
+`src/features/scope-shield/clarifying-questions.ts` scores a pool of questions by
+keyword match, so the three or four returned follow the request: an
+authentication ask surfaces the multi-tenant role and session-lifetime
+questions, a payments ask surfaces reconciliation and provider-downtime
+questions. Each question carries the ambiguity it resolves and the layer it
+protects, can be ticked off in the UI, and the whole list is copyable with
+`formatQuestions` (the "Copy Questions" button).
+
+Every stage so far is a mock: the analysis and the questions are computed in the
+browser, deterministic, and consult no AI. The real IBM Bob 2.0 provider
+replaces `analyzeFeatureRequest` and `generateClarifyingQuestions`; the
+`RiskAnalysis` and `ClarifyingQuestion` shapes are the contracts that call must
+satisfy. No auth, database, or Tier 2/3 work is in any of these stages.
 
 ## IBM Bob 2.0 integration
 
@@ -191,6 +204,8 @@ src/
       scope-shield.tsx     Stage 1 + 2: input form, loading, result mount
       risk-analysis.ts     Stage 2: mock hidden-scope detector + contract
       risk-analysis-view.tsx Stage 2: risk badge, per-layer hidden-scope cards
+      clarifying-questions.ts Stage 3: mock question pool + formatter
+      clarifying-questions-view.tsx Stage 3: checklist + Copy Questions button
   lib/
     env.ts               Server-side env, validated with zod
     repository-url.ts    Repository input parsing/canonicalisation
