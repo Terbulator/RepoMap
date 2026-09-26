@@ -38,12 +38,19 @@ test("reads the `bob run --format json` result envelope", () => {
     type: "result",
     timestamp: "2026-01-01T00:00:00.000Z",
     status: "success",
-    stats: { task_id: "task_3", duration_ms: 34_957, session_costs: 0.13, tool_calls: 12 },
+    stats: {
+      task_id: "task_3",
+      duration_ms: 34_957,
+      session_costs: 0.13,
+      max_cost: 0,
+      tool_calls: 12,
+    },
     last_message: JSON.stringify(analysis),
   });
 
   const result = parseBobOutput(stdout);
   assert.equal(result.projectSummary, "A demo service.");
+  assert.equal(result.trace.taskId, "task_3");
   assert.equal(result.modules?.length, 1);
   assert.equal(result.recommendedFiles?.length, 1);
 });

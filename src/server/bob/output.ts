@@ -5,10 +5,11 @@ import { BobProviderError, type BobTaskTrace, type RepositoryAnalysis } from "./
 /**
  * Reads the `--format json` output of `bob run`.
  *
- * The exact payload shape of the installed Bob CLI has not been verified
- * against a live run, so this accepts the documented envelope keys, a stream of
- * JSON documents, or plain text containing a JSON object. Anything unreadable
- * is reported as a provider failure instead of being guessed at.
+ * A successful run prints one envelope: `{type: "result", timestamp, status,
+ * "success", stats, last_message}`, where the analysis JSON is the string in
+ * `last_message` and the task id is `stats.task_id`. The other envelope keys and
+ * a plain-text fallback are still accepted, but those never come from the real
+ * CLI; anything unreadable is a provider failure rather than a guess.
  */
 export function parseBobOutput(stdout: string, binary = "bob"): RepositoryAnalysis {
   const trimmed = stdout.trim();
@@ -16,7 +17,8 @@ export function parseBobOutput(stdout: string, binary = "bob"): RepositoryAnalys
     throw new BobProviderError(`${binary} returned no output.`);
   }
 
-  const payload = extractJsonPayload(firstJsonObject(trimmed) ?? trimmed);
+  const envelope = firstJsonObject(trimmed);
+  const payload = extractJsonPayload(envelope ?? trimmed);
 
   if (payload == null || typeof payload !== "object") {
     throw new BobProviderError(
@@ -25,8 +27,15 @@ export function parseBobOutput(stdout: string, binary = "bob"): RepositoryAnalys
   }
 
   const record = payload as Record<string, unknown>;
+  // The task id lives on the envelope, which extractJsonPayload unwraps away.
+  const envelopeStats = (envelope as Record<string, unknown> | null)?.stats;
+  const stats = (envelopeStats ?? record.stats) as Record<string, unknown> | undefined;
   const trace: BobTaskTrace = {
-    taskId: readString(record.taskId) ?? readString(record.id) ?? readString(record.sessionId),
+    taskId:
+      readString(record.taskId) ??
+      readString(record.id) ??
+      readString(record.sessionId) ??
+      readString(stats?.task_id),
     model: readString(record.model),
   };
 
