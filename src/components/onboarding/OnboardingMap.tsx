@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, FormEvent } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { RepoMapAnalysis } from "@/types/onboarding";
 import { ProjectSummary } from "./ProjectSummary";
@@ -9,6 +9,9 @@ import { ModuleCards } from "./ModuleCards";
 import { RecommendedFiles } from "./RecommendedFiles";
 import { Gotchas } from "./Gotchas";
 import { ModuleDetailDrawer } from "./ModuleDetailDrawer";
+import { analyzeRepositoryClient } from "@/features/onboarding-map/api-client";
+import { parseRepositoryRef, InvalidRepositoryError } from "@/lib/repository-url";
+import type { RepoMap } from "@/features/repomap/schema";
 
 const mockAnalysis: RepoMapAnalysis = {
   projectSummary: "RepoMap is a developer onboarding and code intelligence tool that transforms any GitHub repository into an interactive, living map. It uses IBM Bob 2.0 to analyze the full repository context and generates a visual architecture diagram, plain-English module breakdowns, ranked starter files, and common gotchas — helping new developers become productive in unfamiliar codebases within minutes instead of days.",
@@ -166,8 +169,71 @@ const mockAnalysis: RepoMapAnalysis = {
   ]
 };
 
+type State =
+  | { phase: "idle" }
+  | { phase: "loading" }
+  | { phase: "error"; code: string; message: string }
+  | { phase: "success"; analysis: RepoMapAnalysis; repoUrl: string };
+
+function convertRepoMapToAnalysis(repoMap: RepoMap): RepoMapAnalysis {
+  return {
+    projectSummary: repoMap.projectSummary,
+    stack: repoMap.stack,
+    modules: repoMap.modules.map((m) => ({
+      id: m.id,
+      name: m.name,
+      path: m.path,
+      purpose: m.purpose,
+      files: m.files,
+      dependencies: m.dependencies,
+    })),
+    recommendedFiles: repoMap.recommendedFiles,
+    gotchas: repoMap.gotchas,
+    relationships: repoMap.relationships,
+    provenance: repoMap.provenance,
+  };
+}
+
 export function OnboardingMap() {
+  const [repo, setRepo] = useState("");
+  const [state, setState] = useState<State>({ phase: "idle" });
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
+
+  const isLoading = state.phase === "loading";
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = repo.trim();
+    if (!trimmed) return;
+
+    // Validate repository URL using existing utility
+    try {
+      parseRepositoryRef(trimmed);
+    } catch (error) {
+      if (error instanceof InvalidRepositoryError) {
+        setState({ phase: "error", code: "INVALID_REPOSITORY", message: error.message });
+        return;
+      }
+      setState({ phase: "error", code: "INVALID_REPOSITORY", message: "Invalid repository input." });
+      return;
+    }
+
+    setState({ phase: "loading" });
+
+    const result = await analyzeRepositoryClient(trimmed);
+    if (result.ok) {
+      const analysis = convertRepoMapToAnalysis(result.analysis);
+      setState({ phase: "success", analysis, repoUrl: result.analysis.repository.url });
+    } else {
+      setState({ phase: "error", code: result.code, message: result.message });
+    }
+  }
+
+  function handleReset() {
+    setState({ phase: "idle" });
+    setRepo("");
+    setSelectedModuleId(null);
+  }
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white">
@@ -187,12 +253,12 @@ export function OnboardingMap() {
         }
       `}</style>
 
-      <header className="border-b border-neutral-800 bg-neutral-950/80 backdrop-blur-sm sticky top-0 z-10">
+<header className="border-b border-neutral-800 bg-neutral-950/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="mx-auto max-w-7xl px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-primary-500 flex items-center justify-center">
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 012-2z" />
               </svg>
             </div>
             <div>
@@ -200,36 +266,165 @@ export function OnboardingMap() {
               <p className="text-xs text-neutral-400">Onboarding Map</p>
             </div>
           </div>
-          <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary-500/20 border border-primary-500/30 text-primary-400">
-            Mock Analysis
-          </span>
+          {state.phase === "success" && state.analysis.provenance && (
+            <div className="flex items-center gap-2">
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  state.analysis.provenance.provider === "mock"
+                    ? "bg-amber-500/20 border border-amber-500/30 text-amber-400"
+                    : "bg-green-500/20 border border-green-500/30 text-green-400"
+                }`}
+              >
+                {state.analysis.provenance.provider === "mock"
+                  ? "Mock Analysis (Demo)"
+                  : "IBM Bob 2.0 Analysis"}
+              </span>
+              {state.analysis.provenance.notice && (
+                <span className="px-2 py-1 text-xs text-neutral-500 bg-neutral-800 rounded">
+                  {state.analysis.provenance.notice}
+                </span>
+              )}
+            </div>
+          )}
+          {state.phase !== "success" && (
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary-500/20 border border-primary-500/30 text-primary-400">
+              Mock Analysis
+            </span>
+          )}
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-8 space-y-8">
-        <ProjectSummary analysis={mockAnalysis} />
+        {/* Input form — shown in idle and error states */}
+        {state.phase === "idle" && (
+          <section aria-labelledby="onboarding-heading" className="max-w-3xl mx-auto">
+            <h1 id="onboarding-heading" className="text-2xl font-semibold tracking-tight text-white">
+              Onboarding Map
+            </h1>
+            <p className="mt-2 text-sm text-neutral-400">
+              Enter a GitHub repository and IBM Bob 2.0 will generate a plain-English map: project
+              summary, module breakdown, recommended starting files, and a relationship diagram.
+            </p>
 
-        <ReactFlowProvider>
-          <ArchitectureDiagram
-            analysis={mockAnalysis}
-            selectedModuleId={selectedModuleId}
-            onModuleSelect={setSelectedModuleId}
-          />
-        </ReactFlowProvider>
+            <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-start">
+              <label htmlFor="repository-input" className="sr-only">
+                GitHub repository URL or owner/repo
+              </label>
+              <input
+                id="repository-input"
+                type="text"
+                value={repo}
+                onChange={(e) => setRepo(e.target.value)}
+                placeholder="https://github.com/owner/repo  or  owner/repo"
+                disabled={isLoading}
+                className="flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-4 py-2.5 text-sm placeholder:text-neutral-500 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={!repo.trim() || isLoading}
+                className="rounded-md bg-primary-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+              >
+                {isLoading ? "Analyzing…" : "Analyze"}
+              </button>
+            </form>
 
-        <RecommendedFiles analysis={mockAnalysis} />
+            <p className="mt-3 text-xs text-neutral-500">
+              Only public GitHub repositories are supported. Analysis may take up to 15 minutes when
+              IBM Bob 2.0 is active.
+            </p>
+          </section>
+        )}
 
-        <ModuleCards
-          analysis={mockAnalysis}
-          selectedModuleId={selectedModuleId}
-          onModuleSelect={setSelectedModuleId}
-        />
+        {/* Loading state */}
+        {state.phase === "loading" && (
+          <section className="max-w-3xl mx-auto" role="status" aria-live="polite">
+            <div className="flex flex-col items-center gap-4 py-16 text-center">
+              <span
+                aria-hidden="true"
+                className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-primary-500"
+              />
+              <p className="text-sm text-neutral-400">
+                IBM Bob 2.0 is reading the repository and building the map…
+              </p>
+              <p className="text-xs text-neutral-500">This can take several minutes.</p>
+            </div>
+          </section>
+        )}
 
-        <Gotchas analysis={mockAnalysis} />
+        {/* Error state */}
+        {state.phase === "error" && (
+          <section className="max-w-3xl mx-auto" role="alert">
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-5">
+              <p className="text-sm font-medium text-red-400">Analysis failed</p>
+              <p className="mt-1.5 text-sm text-red-300">{state.message}</p>
+              <p className="mt-1 font-mono text-xs text-red-500">code: {state.code}</p>
+              <button
+                type="button"
+                onClick={handleReset}
+                className="mt-4 rounded-md border border-red-500/30 px-4 py-2 text-xs font-medium text-red-300 hover:bg-red-500/10 transition-colors"
+              >
+                Try again
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* Success state — render the full dashboard */}
+        {(state.phase === "success" || state.phase === "idle") && (
+          <>
+{state.phase === "success" && (
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-xs text-neutral-500">{state.repoUrl}</span>
+                  {state.analysis.provenance && (
+                    <span
+                      className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                        state.analysis.provenance.provider === "mock"
+                          ? "bg-amber-500/20 border border-amber-500/30 text-amber-400"
+                          : "bg-green-500/20 border border-green-500/30 text-green-400"
+                      }`}
+                    >
+                      {state.analysis.provenance.provider === "mock"
+                        ? "Mock (Demo)"
+                        : "IBM Bob 2.0"}
+                      </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="text-xs text-neutral-500 underline underline-offset-2 hover:text-primary-400 transition-colors"
+                >
+                  ← Analyze another repository
+                </button>
+              </div>
+            )}
+
+            <ProjectSummary analysis={state.phase === "success" ? state.analysis : mockAnalysis} />
+
+            <ReactFlowProvider>
+              <ArchitectureDiagram
+                analysis={state.phase === "success" ? state.analysis : mockAnalysis}
+                selectedModuleId={selectedModuleId}
+                onModuleSelect={setSelectedModuleId}
+              />
+            </ReactFlowProvider>
+
+            <RecommendedFiles analysis={state.phase === "success" ? state.analysis : mockAnalysis} />
+
+            <ModuleCards
+              analysis={state.phase === "success" ? state.analysis : mockAnalysis}
+              selectedModuleId={selectedModuleId}
+              onModuleSelect={setSelectedModuleId}
+            />
+
+            <Gotchas analysis={state.phase === "success" ? state.analysis : mockAnalysis} />
+          </>
+        )}
       </main>
 
       <ModuleDetailDrawer
-        analysis={mockAnalysis}
+        analysis={state.phase === "success" ? state.analysis : mockAnalysis}
         selectedModuleId={selectedModuleId}
         onClose={() => setSelectedModuleId(null)}
       />

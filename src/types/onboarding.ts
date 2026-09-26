@@ -5,6 +5,13 @@ export interface RepoMapAnalysis {
   recommendedFiles: RecommendedFile[];
   gotchas: (string | Gotcha)[];
   relationships: Relationship[];
+  provenance?: {
+    provider: "bob-2.0" | "mock";
+    bobTaskId: string | null;
+    generatedAt: string;
+    durationMs: number;
+    notice: string | null;
+  };
 }
 
 export interface Module {

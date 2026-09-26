@@ -11,6 +11,17 @@ export async function analyzeRepository(repository: RepositoryRef): Promise<Repo
   const provider = await getBobProviderFor(repository);
   const startedAt = new Date();
 
+  // Development logging
+  if (process.env.NODE_ENV === "development") {
+    console.log("[RepoMap] Analysis started", {
+      repositoryUrl: repository.url,
+      repositorySlug: repository.slug,
+      provider: provider.name,
+      workspace: process.env.REPOMAP_WORKSPACE_DIR ? "configured" : "auto-clone",
+      isMock: provider.name === "mock",
+    });
+  }
+
   const analysis = await provider.analyzeRepository(repository.url);
 
   const repoMap = toRepoMap(analysis, {
@@ -27,6 +38,18 @@ export async function analyzeRepository(repository: RepositoryRef): Promise<Repo
       notice: provider.name === "mock" ? MOCK_NOTICE : null,
     },
   });
+
+  // Development logging
+  if (process.env.NODE_ENV === "development") {
+    console.log("[RepoMap] Analysis completed", {
+      repositoryUrl: repository.url,
+      provider: provider.name,
+      modulesCount: repoMap.modules.length,
+      relationshipsCount: repoMap.relationships.length,
+      durationMs: Date.now() - startedAt.getTime(),
+      notice: provider.name === "mock" ? MOCK_NOTICE : null,
+    });
+  }
 
   return repoMapSchema.parse(repoMap);
 }
