@@ -8,11 +8,14 @@ import {
   isEmptyFeatureRequest,
   saveFeatureRequest,
 } from "@/features/scope-shield/feature-request";
+import type { ClarifyingQuestion } from "@/features/scope-shield/clarifying-questions";
+import { generateClarifyingQuestions } from "@/features/scope-shield/clarifying-questions";
+import { ClarifyingQuestionsView } from "@/features/scope-shield/clarifying-questions-view";
 import type { RiskAnalysis } from "@/features/scope-shield/risk-analysis";
 import { analyzeFeatureRequest } from "@/features/scope-shield/risk-analysis";
 import { RiskAnalysisView } from "@/features/scope-shield/risk-analysis-view";
 
-/** Fake latency so the loading state is visible. Stage 3 replaces this. */
+/** Fake latency so the loading state is visible. A real provider replaces this. */
 const MOCK_ANALYSIS_DELAY_MS = 900;
 
 /**
@@ -20,7 +23,8 @@ const MOCK_ANALYSIS_DELAY_MS = 900;
  *
  * Stage 1 captures the free-text feature request and stores it in localStorage
  * under "featureRequest". Stage 2 renders a MOCK risk analysis per technical
- * layer. No IBM Bob 2.0 call happens yet.
+ * layer. Stage 3 adds the MOCK clarifying questions below it. No IBM Bob 2.0
+ * call happens yet.
  */
 export function ScopeShield() {
   const [text, setText] = useState("");
@@ -29,6 +33,7 @@ export function ScopeShield() {
   const [message, setMessage] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<RiskAnalysis | null>(null);
+  const [questions, setQuestions] = useState<ClarifyingQuestion[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -61,6 +66,7 @@ export function ScopeShield() {
     setIsAnalyzing(true);
     timer.current = setTimeout(() => {
       setAnalysis(analyzeFeatureRequest(request));
+      setQuestions(generateClarifyingQuestions(request));
       setIsAnalyzing(false);
     }, MOCK_ANALYSIS_DELAY_MS);
   }
@@ -136,6 +142,10 @@ export function ScopeShield() {
       ) : null}
 
       {analysis && !isAnalyzing ? <RiskAnalysisView analysis={analysis} /> : null}
+
+      {questions.length > 0 && !isAnalyzing ? (
+        <ClarifyingQuestionsView questions={questions} />
+      ) : null}
     </section>
   );
 }
