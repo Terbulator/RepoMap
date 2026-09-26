@@ -5,7 +5,13 @@ import { useEffect, useRef, useState } from "react";
 const RESET_COPIED_AFTER_MS = 2000;
 
 /** Stage 4 output: an editable, copyable reply for the requester. */
-export function DraftedReplyView({ draft }: { draft: string }) {
+export function DraftedReplyView({
+  draft,
+  source,
+}: {
+  draft: string;
+  source?: "bob-2.0" | "mock";
+}) {
   const [text, setText] = useState(draft);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -75,7 +81,9 @@ export function DraftedReplyView({ draft }: { draft: string }) {
           ? "Draft copied. Paste it into email or Slack."
           : copyState === "failed"
             ? "Could not reach the clipboard. Select the text and copy it manually."
-            : "Mock draft assembled from the request, the detected stack and the clarifying questions above."}
+            : source === "bob-2.0"
+              ? "Draft generated live by IBM Bob 2.0."
+              : "Mock draft assembled from the request, the detected stack and the clarifying questions above."}
       </p>
     </section>
   );

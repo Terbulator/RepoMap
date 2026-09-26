@@ -26,7 +26,9 @@ type ViewState = "idle" | "loading" | "success" | "error";
  * "featureRequest". Stages 2-5 render the mock risk analysis, clarifying
  * questions, drafted reply and repository context. Stage 6 owns the run
  * lifecycle: validation, the loading state, the error banner and retry.
- * Everything below the fold is still mock data; no IBM Bob 2.0 call happens.
+ * On submit, `runScopeAnalysis` attempts a live IBM Bob 2.0 scope call via
+ * `/api/scope/analyze`; if Bob is unavailable it logs a warning and falls back
+ * to the deterministic mock generators.
  */
 export function ScopeShield() {
   const [text, setText] = useState("");
@@ -37,8 +39,11 @@ export function ScopeShield() {
   const [result, setResult] = useState<ScopeAnalysisResult | null>(null);
   const runId = useRef(0);
 
-  // Stage 5 context. MOCK data today; the real /api/repomap response matches it.
+  // Stage 5 context. The real /api/repository/analyze response matches it; the
+  // mock fallback is used when no analysis has been stored in localStorage.
   const repositoryContext = useMemo(() => getRepositoryContext(), []);
+
+  const [fellBackToMock, setFellBackToMock] = useState(false);
 
   const isLoading = viewState === "loading";
   const isEmpty = text.trim().length === 0;
@@ -63,10 +68,12 @@ export function ScopeShield() {
 
     if (outcome.status === "error") {
       setErrorMessage(outcome.message || ANALYSIS_ERROR_MESSAGE);
+      setFellBackToMock(outcome.fellBackToMock);
       setViewState("error");
       return;
     }
 
+    setFellBackToMock(false);
     setResult(outcome.result);
     setViewState("success");
   }
@@ -148,7 +155,8 @@ export function ScopeShield() {
             {isLoading ? "Analyzing Scope…" : "Analyze Scope"}
           </button>
           <span id="feature-request-hint" className="text-xs text-neutral-500">
-            At least 10 characters. The analysis is a local mock.
+            At least 10 characters. Scope analysis calls IBM Bob 2.0, with a
+            deterministic mock fallback when Bob is unavailable.
           </span>
         </div>
 
@@ -171,10 +179,17 @@ export function ScopeShield() {
           <p className="font-semibold text-rose-800 dark:text-rose-200">
             {errorMessage}
           </p>
-          <p className="mt-1 text-rose-700/90 dark:text-rose-300/90">
-            The request is still saved. Retry, or edit the request to clear this
-            message.
-          </p>
+          {fellBackToMock ? (
+            <p className="mt-1 text-xs text-rose-700/90 dark:text-rose-300/90">
+              Live IBM Bob 2.0 was unavailable; the deterministic mock analysis
+              was used as a fallback and also returned an error for this request.
+            </p>
+          ) : (
+            <p className="mt-1 text-rose-700/90 dark:text-rose-300/90">
+              The request is still saved. Retry, or edit the request to clear this
+              message.
+            </p>
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -209,9 +224,20 @@ export function ScopeShield() {
             <p className="mt-1 text-neutral-600 dark:text-neutral-300">
               Request saved: {result.request}
             </p>
-            <p className="mt-2 text-xs text-neutral-500">
-              Stored in localStorage under the key &quot;featureRequest&quot;.
-            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs text-neutral-500">
+                Stored in localStorage under the key &quot;featureRequest&quot;.
+              </span>
+              {result.source === "bob-2.0" ? (
+                <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-medium text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
+                  Live IBM Bob 2.0
+                </span>
+              ) : (
+                <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                  Mock fallback
+                </span>
+              )}
+            </div>
           </div>
 
           <RiskAnalysisView analysis={result.analysis} grounding={result.grounding} />
@@ -221,7 +247,7 @@ export function ScopeShield() {
             grounding={result.grounding}
           />
 
-          <DraftedReplyView key={result.draft} draft={result.draft} />
+          <DraftedReplyView key={result.draft} draft={result.draft} source={result.source} />
         </>
       ) : null}
     </section>
