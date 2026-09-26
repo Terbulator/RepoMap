@@ -150,16 +150,21 @@ const PRESETS: Preset[] = [
   {
     id: "payments",
     label: "payments",
+    // "pay" is deliberately absent: word-prefix matching would fire on "payroll".
+    // "cart" is deliberately absent for the same reason ("cartoons"); "checkout"
+    // still covers most shopping-cart work.
     keywords: [
       "payment",
-      "pay",
+      "payout",
       "stripe",
       "checkout",
       "billing",
       "subscription",
       "invoice",
       "refund",
-      "cart",
+      "shopping cart",
+      "cart page",
+      "add to cart",
       "price",
       "pricing",
     ],
@@ -275,7 +280,21 @@ const TRIGGERS: Array<{
   },
   {
     domain: "frontend",
-    keywords: ["page", "screen", "dashboard", "panel", "modal", "list", "table", "report", "settings"],
+    // "list" is deliberately absent: it would fire on "listener" and "playlist".
+    keywords: [
+      "page",
+      "screen",
+      "dashboard",
+      "panel",
+      "modal",
+      "table",
+      "report",
+      "settings",
+      "list page",
+      "list view",
+      "user list",
+      "listing",
+    ],
     item: {
       title: "Extra UI surfaces and their states",
       detail:
