@@ -103,6 +103,16 @@ nodes and edges onto React Flow when the UI work starts.
 
 Liveness plus whether Bob 2.0 is configured.
 
+## ScopeShield — Stage 1 (feature request input)
+
+`/scope-shield` takes a free-text feature request, trims and squeezes the
+whitespace, and stores the result in the browser under the localStorage key
+`featureRequest`. Empty input is rejected with "Please describe the feature you
+want to build." A successful submit shows "Feature request stored successfully!"
+and logs the request to the browser console. The stored value is also printed
+with `localStorage.getItem("featureRequest")` in DevTools → Application → Local
+Storage. No analysis, AI call, auth, or database is part of this stage.
+
 ## IBM Bob 2.0 integration
 
 `src/server/bob/` is the only place that talks to Bob 2.0:
