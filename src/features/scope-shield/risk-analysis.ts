@@ -13,7 +13,9 @@
  * returned `RiskAnalysis` shape is the contract that call must satisfy.
  */
 
-import { findSignal, matchesAny } from "@/features/scope-shield/keyword-match";
+// Relative, with the extension, so `node --test` can load this module directly.
+// Same convention as src/features/repomap/normalize.ts.
+import { findSignal, matchesAny } from "./keyword-match.ts";
 
 export type RiskLevel = "HIGH" | "MEDIUM" | "LOW";
 
@@ -255,7 +257,15 @@ const TRIGGERS: Array<{
 }> = [
   {
     domain: "frontend",
-    keywords: ["validation", "validate", "form", "input", "search", "filter"],
+    keywords: [
+      "validation",
+      "validate",
+      "form validation",
+      "form field",
+      "input",
+      "search",
+      "filter",
+    ],
     item: {
       title: "Validation rules on both sides",
       detail:
@@ -275,7 +285,25 @@ const TRIGGERS: Array<{
   },
   {
     domain: "backend",
-    keywords: ["api", "endpoint", "route", "webhook", "cron", "schedule", "sync", "import", "export", "notify", "email"],
+    keywords: [
+      "api",
+      "endpoint",
+      "route",
+      "webhook",
+      "cron",
+      "schedule",
+      "async",
+      "synchron",
+      "data import",
+      "import data",
+      "csv import",
+      "bulk import",
+      "export data",
+      "csv export",
+      "bulk export",
+      "notify",
+      "email",
+    ],
     item: {
       title: "Endpoint contract and background processing",
       detail:

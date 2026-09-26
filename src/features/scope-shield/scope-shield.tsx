@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   EMPTY_REQUEST_MESSAGE,
@@ -16,7 +16,13 @@ import { DraftedReplyView } from "@/features/scope-shield/drafted-reply-view";
 import type { RiskAnalysis } from "@/features/scope-shield/risk-analysis";
 import { analyzeFeatureRequest } from "@/features/scope-shield/risk-analysis";
 import { RiskAnalysisView } from "@/features/scope-shield/risk-analysis-view";
-import { detectStackContext } from "@/features/scope-shield/stack-context";
+import { RepositoryContextView } from "@/features/scope-shield/repository-context-view";
+import type { StackContext } from "@/features/scope-shield/stack-context";
+import {
+  detectStackContext,
+  formatGroundingNote,
+  getRepositoryContext,
+} from "@/features/scope-shield/stack-context";
 
 /** Fake latency so the loading state is visible. A real provider replaces this. */
 const MOCK_ANALYSIS_DELAY_MS = 900;
@@ -26,8 +32,9 @@ const MOCK_ANALYSIS_DELAY_MS = 900;
  *
  * Stage 1 captures the free-text feature request and stores it in localStorage
  * under "featureRequest". Stage 2 renders a MOCK risk analysis per technical
- * layer, stage 3 the MOCK clarifying questions, stage 4 a MOCK drafted reply
- * grounded in the MOCK stack context. No IBM Bob 2.0 call happens yet.
+ * layer, stage 3 the MOCK clarifying questions, stage 4 a MOCK drafted reply,
+ * stage 5 the repository context (FR-7) every one of those is grounded in. No
+ * IBM Bob 2.0 call happens yet.
  */
 export function ScopeShield() {
   const [text, setText] = useState("");
@@ -38,7 +45,19 @@ export function ScopeShield() {
   const [analysis, setAnalysis] = useState<RiskAnalysis | null>(null);
   const [questions, setQuestions] = useState<ClarifyingQuestion[]>([]);
   const [draft, setDraft] = useState("");
+  const [stack, setStack] = useState<StackContext | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Stage 5: the repository ScopeShield reasons about. MOCK data today; the real
+  // /api/repomap response has the same shape.
+  const repositoryContext = useMemo(() => getRepositoryContext(), []);
+  const grounding = useMemo(
+    () =>
+      stack
+        ? formatGroundingNote(repositoryContext, stack)
+        : formatGroundingNote(repositoryContext, detectStackContext("")),
+    [repositoryContext, stack],
+  );
 
   useEffect(() => {
     return () => {
@@ -71,15 +90,19 @@ export function ScopeShield() {
     timer.current = setTimeout(() => {
       const nextAnalysis = analyzeFeatureRequest(request);
       const nextQuestions = generateClarifyingQuestions(request);
+      const nextStack = detectStackContext(request);
+      const nextGrounding = formatGroundingNote(repositoryContext, nextStack);
 
       setAnalysis(nextAnalysis);
       setQuestions(nextQuestions);
+      setStack(nextStack);
       setDraft(
         buildDraftedReply({
           request,
-          stack: detectStackContext(request),
+          stack: nextStack,
           analysis: nextAnalysis,
           questions: nextQuestions,
+          grounding: nextGrounding,
         }),
       );
       setIsAnalyzing(false);
@@ -90,7 +113,15 @@ export function ScopeShield() {
     <section aria-label="ScopeShield feature request" className="max-w-3xl">
       <h1 className="text-2xl font-semibold tracking-tight">ScopeShield</h1>
 
-      <form onSubmit={handleSubmit} className="mt-6">
+      <div className="mt-6">
+        <RepositoryContextView
+          context={repositoryContext}
+          stack={stack ?? detectStackContext("")}
+          grounding={grounding}
+        />
+      </div>
+
+      <form onSubmit={handleSubmit} className="mt-8">
         <label htmlFor="feature-request" className="block text-sm font-medium">
           Describe the feature you want to build:
         </label>
@@ -157,10 +188,12 @@ export function ScopeShield() {
         </div>
       ) : null}
 
-      {analysis && !isAnalyzing ? <RiskAnalysisView analysis={analysis} /> : null}
+      {analysis && !isAnalyzing ? (
+        <RiskAnalysisView analysis={analysis} grounding={grounding} />
+      ) : null}
 
       {questions.length > 0 && !isAnalyzing ? (
-        <ClarifyingQuestionsView questions={questions} />
+        <ClarifyingQuestionsView questions={questions} grounding={grounding} />
       ) : null}
 
       {draft && !isAnalyzing ? (

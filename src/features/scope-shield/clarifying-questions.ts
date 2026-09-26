@@ -7,8 +7,8 @@
  * the IBM Bob 2.0 provider; `ClarifyingQuestion` is the contract for that call.
  */
 
-import type { DomainId } from "@/features/scope-shield/risk-analysis";
-import { findSignal } from "@/features/scope-shield/keyword-match";
+import { findSignal } from "./keyword-match.ts";
+import type { DomainId } from "./risk-analysis.ts";
 
 export type ClarifyingQuestion = {
   /** Stable id so React keys and the checklist state stay predictable. */

@@ -20,8 +20,10 @@ const RESET_COPIED_AFTER_MS = 2000;
 /** Stage 3 output: the questions to ask before code is written. */
 export function ClarifyingQuestionsView({
   questions,
+  grounding,
 }: {
   questions: ClarifyingQuestion[];
+  grounding?: string;
 }) {
   const [answered, setAnswered] = useState<Record<string, boolean>>({});
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
@@ -83,6 +85,12 @@ export function ClarifyingQuestionsView({
             ? "Could not reach the clipboard. Select the text and copy it manually."
             : "Ask these before anyone writes code. Tick them off as you get answers."}
       </p>
+
+      {grounding ? (
+        <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+          {grounding}
+        </p>
+      ) : null}
 
       <ol className="mt-4 space-y-3">
         {questions.map((question, index) => {

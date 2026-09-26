@@ -37,7 +37,13 @@ const SOURCE_LABELS = {
 } as const;
 
 /** Stage 2 output: risk level plus the hidden work per technical layer. */
-export function RiskAnalysisView({ analysis }: { analysis: RiskAnalysis }) {
+export function RiskAnalysisView({
+  analysis,
+  grounding,
+}: {
+  analysis: RiskAnalysis;
+  grounding?: string;
+}) {
   return (
     <div className="mt-10">
       <section aria-label="Risk analysis">
@@ -61,6 +67,11 @@ export function RiskAnalysisView({ analysis }: { analysis: RiskAnalysis }) {
         <p className="mt-1 text-xs text-neutral-500">
           {LEVEL_HINTS[analysis.riskLevel]}
         </p>
+        {grounding ? (
+          <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+            {grounding}
+          </p>
+        ) : null}
       </section>
 
       <section aria-label="Hidden scope and unspoken requirements" className="mt-8">

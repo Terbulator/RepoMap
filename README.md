@@ -103,7 +103,7 @@ nodes and edges onto React Flow when the UI work starts.
 
 Liveness plus whether Bob 2.0 is configured.
 
-## ScopeShield — Stages 1–4 (input, risk analysis, questions, drafted reply)
+## ScopeShield — Stages 1–5 (input, analysis, questions, reply, repo context)
 
 `/scope-shield` takes a free-text feature request, trims and squeezes the
 whitespace, and stores the result in the browser under the localStorage key
@@ -147,6 +147,16 @@ request implies (Stripe, Twilio, object storage, full-text search, …).
 request, that stack, the risk level, up to four detected hidden-scope items and
 the clarifying questions into an email-shaped message. The UI shows it in an
 editable textarea with "Copy Drafted Reply" and "Reset Draft".
+
+Stage 5 adds the **Detected Repository Context** banner at the top of
+`/scope-shield` and grounds every output in it (FR-7).
+`getRepositoryContext()` in `src/features/scope-shield/stack-context.ts` returns
+the mock repository contract — name, primary stack, auth & middleware
+architecture, primary directories, plus provenance that says plainly that no
+repository was analysed. `formatGroundingNote()` produces the line each section
+prints ("Grounded in Repo Analysis — RepoMap Demo Repository (React 19, Next.js
+16, Node.js 20), plus Stripe."). The shape matches what `/api/repomap` already
+returns, so Stage 5 of the plan swaps the mock for the real analysis.
 
 Every stage so far is a mock: the analysis, the questions and the draft are
 computed in the browser, deterministic, and consult no AI. The real IBM Bob 2.0
@@ -216,9 +226,10 @@ src/
       risk-analysis-view.tsx Stage 2: risk badge, per-layer hidden-scope cards
       clarifying-questions.ts Stage 3: mock question pool + formatter
       clarifying-questions-view.tsx Stage 3: checklist + Copy Questions button
-      stack-context.ts     Stage 4: mock stack detection (FR-7 grounding)
+      stack-context.ts     Stages 4-5: mock stack detection + repository context
       drafted-reply.ts     Stage 4: mock reply composer
       drafted-reply-view.tsx Stage 4: editable draft + copy/reset buttons
+      repository-context-view.tsx Stage 5: detected context banner (FR-7)
   lib/
     env.ts               Server-side env, validated with zod
     repository-url.ts    Repository input parsing/canonicalisation

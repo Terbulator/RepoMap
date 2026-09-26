@@ -15,7 +15,15 @@ test("does not match a keyword hiding inside a longer word", () => {
   assert.equal(findSignal(["env"], "calendar event feed"), "");
   assert.equal(findSignal(["api"], "rapid response"), "");
   assert.equal(findSignal(["table"], "a comfortable layout"), "");
-  assert.equal(findSignal(["import"], "this is important"), "");
+  assert.equal(findSignal(["store"], "restore a backup"), "");
+});
+
+test("prefix collisions are avoided in the keyword lists, not the matcher", () => {
+  // "important" really does start with "import", so the matcher is right to
+  // match it. That is why no rule uses a bare "import" keyword.
+  assert.equal(findSignal(["import"], "this is important"), "import");
+  assert.equal(findSignal(["data import"], "this is important"), "");
+  assert.equal(findSignal(["ai model"], "book a flight"), "");
 });
 
 test("multi-word keywords still match literally", () => {
