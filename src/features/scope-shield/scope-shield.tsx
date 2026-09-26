@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { FormEvent } from "react";
 import {
   ANALYSIS_ERROR_MESSAGE,
+  NO_REPOSITORY_MESSAGE,
   runScopeAnalysis,
   validateFeatureRequest,
 } from "@/features/scope-shield/analysis-runner";
@@ -13,20 +14,33 @@ import { STORED_REQUEST_MESSAGE, saveFeatureRequest } from "@/features/scope-shi
 import { DraftedReplyView } from "@/features/scope-shield/drafted-reply-view";
 import { RiskAnalysisView } from "@/features/scope-shield/risk-analysis-view";
 import { RepositoryContextView } from "@/features/scope-shield/repository-context-view";
-import { getRepositoryContext } from "@/features/scope-shield/stack-context";
-import { detectStackContext } from "@/features/scope-shield/stack-context";
+import { NO_REPOSITORY_NOTE, toRepositoryContext } from "@/features/scope-shield/stack-context";
+import type { StackContext } from "@/features/scope-shield/stack-context";
+import {
+  getStoredRepoMapSnapshot,
+  subscribeToStoredRepoMap,
+} from "@/features/repomap/store";
 
 /** Idle -> Loading -> Success | Error. */
 type ViewState = "idle" | "loading" | "success" | "error";
 
+/** Before a request is analysed, Bob's own stack is not known yet. */
+const EMPTY_STACK: StackContext = {
+  languages: [],
+  frameworks: [],
+  data: [],
+  integrations: [],
+};
+
 /**
  * ScopeShield (PRD 5.2).
  *
- * Stage 1 captures the feature request and stores it in localStorage under
- * "featureRequest". Stages 2-5 render the mock risk analysis, clarifying
- * questions, drafted reply and repository context. Stage 6 owns the run
- * lifecycle: validation, the loading state, the error banner and retry.
- * Everything below the fold is still mock data; no IBM Bob 2.0 call happens.
+ * The run lifecycle is unchanged — Idle, Loading, Success, Error, with retry and
+ * dismiss — but the analysis is no longer local. Submitting posts the request and
+ * the stored Onboarding Map to /api/scope-shield, the server calls IBM Bob 2.0
+ * against the real workspace, and the result that comes back has already been
+ * validated. Nothing here talks to Bob, and nothing here invents context: with
+ * no analysed repository the page says so instead of showing placeholder data.
  */
 export function ScopeShield() {
   const [text, setText] = useState("");
@@ -35,10 +49,19 @@ export function ScopeShield() {
   const [errorMessage, setErrorMessage] = useState("");
   const [lastRequest, setLastRequest] = useState("");
   const [result, setResult] = useState<ScopeAnalysisResult | null>(null);
+  // localStorage cannot be read while server-rendering, so the repository is
+  // subscribed to as an external store: the server snapshot is null and the
+  // real map appears on the first client render, with no hydration mismatch.
+  const repoMap = useSyncExternalStore(
+    subscribeToStoredRepoMap,
+    getStoredRepoMapSnapshot,
+    getStoredRepoMapSnapshot,
+  );
   const runId = useRef(0);
 
-  // Stage 5 context. MOCK data today; the real /api/repomap response matches it.
-  const repositoryContext = useMemo(() => getRepositoryContext(), []);
+  // The real Onboarding Map result is the only repository context used here.
+  const repositoryContext = useMemo(() => toRepositoryContext(repoMap), [repoMap]);
+  const hasRepository = repoMap !== null;
 
   const isLoading = viewState === "loading";
   const isEmpty = text.trim().length === 0;
@@ -58,7 +81,7 @@ export function ScopeShield() {
     setErrorMessage("");
     setResult(null);
 
-    const outcome = await runScopeAnalysis(request);
+    const outcome = await runScopeAnalysis(request, { repoMap });
     if (runId.current !== id) return;
 
     if (outcome.status === "error") {
@@ -77,6 +100,11 @@ export function ScopeShield() {
     const validation = validateFeatureRequest(text);
     if (!validation.ok) {
       setFieldError(validation.message);
+      return;
+    }
+
+    if (!hasRepository) {
+      setFieldError(NO_REPOSITORY_MESSAGE);
       return;
     }
 
@@ -101,17 +129,24 @@ export function ScopeShield() {
   }
 
   const grounding = result?.grounding ?? "";
+  const analysedProvider = result?.provider ?? repoMap?.provenance.provider ?? null;
+  const isMockProvider = analysedProvider === "mock";
 
   return (
     <section aria-label="ScopeShield feature request" className="max-w-3xl">
       <h1 className="text-2xl font-semibold tracking-tight">ScopeShield</h1>
 
+      {hasRepository ? null : <NoRepositoryState />}
+
       <div className="mt-6">
         <RepositoryContextView
-          context={repositoryContext}
-          stack={result?.stack ?? detectStackContext("")}
+          context={result?.context ?? repositoryContext}
+          stack={result?.stack ?? EMPTY_STACK}
           grounding={
-            grounding || "Grounded in Repo Analysis — no request analysed yet."
+            grounding ||
+            (hasRepository
+              ? "Grounded in Repo Analysis — no request analysed yet."
+              : NO_REPOSITORY_NOTE)
           }
         />
       </div>
@@ -148,7 +183,9 @@ export function ScopeShield() {
             {isLoading ? "Analyzing Scope…" : "Analyze Scope"}
           </button>
           <span id="feature-request-hint" className="text-xs text-neutral-500">
-            At least 10 characters. The analysis is a local mock.
+            {isMockProvider
+              ? "At least 10 characters. Running on the mock provider — IBM Bob 2.0 was not called."
+              : "At least 10 characters. Powered by IBM Bob 2.0 using the analyzed repository context."}
           </span>
         </div>
 
@@ -212,6 +249,11 @@ export function ScopeShield() {
             <p className="mt-2 text-xs text-neutral-500">
               Stored in localStorage under the key &quot;featureRequest&quot;.
             </p>
+            {result.bobTaskId ? (
+              <p className="mt-2 text-xs text-neutral-500">
+                IBM Bob 2.0 task <code>{result.bobTaskId}</code>
+              </p>
+            ) : null}
           </div>
 
           <RiskAnalysisView analysis={result.analysis} grounding={result.grounding} />
@@ -228,7 +270,7 @@ export function ScopeShield() {
   );
 }
 
-/** Placeholder cards shown while the mock pipeline runs. */
+/** Placeholder cards shown while the real IBM Bob 2.0 run is in flight. */
 function LoadingSkeleton() {
   return (
     <div role="status" aria-live="polite" className="mt-6">
@@ -245,6 +287,19 @@ function LoadingSkeleton() {
         <div className="h-24 animate-pulse rounded-lg bg-neutral-100 dark:bg-neutral-800/60" />
         <div className="h-32 animate-pulse rounded-lg bg-neutral-100 dark:bg-neutral-800/60" />
       </div>
+    </div>
+  );
+}
+
+/** Shown until a real Onboarding Map has been analysed. */
+function NoRepositoryState() {
+  return (
+    <div
+      role="status"
+      className="mt-6 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
+    >
+      <p className="font-semibold">No repository analysed yet</p>
+      <p className="mt-1">{NO_REPOSITORY_NOTE}</p>
     </div>
   );
 }

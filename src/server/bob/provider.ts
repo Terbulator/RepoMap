@@ -1,4 +1,5 @@
 import type { ProviderAnalysis } from "@/features/repomap/schema.ts";
+import type { ScopeProviderAnalysis } from "@/features/scope-shield/provider-schema.ts";
 
 /**
  * Thin seam in front of the analysis providers.
@@ -18,9 +19,24 @@ export type RepositoryAnalysis = ProviderAnalysis & {
   trace: BobTaskTrace;
 };
 
+/** One ScopeShield run, exactly as the provider's contract defines it. */
+export type ScopeAnalysis = {
+  scope: ScopeProviderAnalysis;
+  trace: BobTaskTrace;
+};
+
 export interface BobProvider {
   readonly name: BobProviderName;
   analyzeRepository(repositoryUrl: string): Promise<RepositoryAnalysis>;
+  /**
+   * ScopeShield's operation (PRD 5.2). `context` is the rendered RepoMap, passed
+   * as supporting evidence; the provider still reads the workspace itself.
+   */
+  analyzeScope(
+    repositoryUrl: string,
+    request: string,
+    context?: string | null,
+  ): Promise<ScopeAnalysis>;
 }
 
 export class BobProviderError extends Error {

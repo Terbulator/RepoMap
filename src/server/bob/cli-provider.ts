@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
 import { env } from "@/lib/env";
-import { parseBobOutput } from "./output.ts";
-import { buildRepoMapPrompt } from "./prompts.ts";
-import { BobProviderError, type BobProvider, type RepositoryAnalysis } from "./provider.ts";
+import { parseBobOutput, parseScopeOutput } from "./output.ts";
+import { buildRepoMapPrompt, buildScopeShieldPrompt } from "./prompts.ts";
+import { BobProviderError, type BobProvider, type RepositoryAnalysis, type ScopeAnalysis } from "./provider.ts";
 
 export type CliBobProviderOptions = {
   workspace: string;
@@ -17,10 +17,10 @@ export type CliBobProviderOptions = {
  * Runs IBM Bob 2.0 through its installed CLI (`bobshell`, the `bob` command) in
  * headless mode: `bob run --format json --workspace <dir> <prompt>`.
  *
- * This is the only integration path verified against the real tool on this
- * machine (bobshell 2.0.5). It is NOT verified end to end, because headless
- * runs require BOB_API_KEY, which is not available in this environment — see
- * README "Bob integration status".
+ * This is the only integration path, and it is verified end to end on this
+ * machine (bobshell 2.0.5): the Onboarding Map and ScopeShield both complete a
+ * real run against a cloned workspace. It requires BOB_API_KEY in the server
+ * environment; the browser never sees it.
  */
 export function createCliBobProvider(options: CliBobProviderOptions): BobProvider {
   const {
@@ -36,32 +36,54 @@ export function createCliBobProvider(options: CliBobProviderOptions): BobProvide
     name: "bob-2.0",
 
     async analyzeRepository(repositoryUrl: string): Promise<RepositoryAnalysis> {
-      if (!apiKey) {
-        throw new BobProviderError(
-          "BOB_API_KEY is not set. Headless IBM Bob 2.0 runs require it; export it before starting the app.",
-        );
-      }
-
-      const stdout = await runBob(
-        buildCommand(binary, [
-          "run",
-          "--format",
-          "json",
-          "--max-turns",
-          String(maxTurns),
-          "--disable-mcp",
-          "--disable-subagents",
-          "--workspace",
-          workspace,
-          buildRepoMapPrompt(repositoryUrl),
-        ]),
-        binary,
-        timeoutMs,
-        runImpl,
-      );
+      const stdout = await runPrompt(buildRepoMapPrompt(repositoryUrl));
       return parseBobOutput(stdout, binary);
     },
+
+    /**
+     * ScopeShield's operation. Same CLI, same execution path, same prompt shape
+     * rules as `analyzeRepository` — only the prompt differs.
+     */
+    async analyzeScope(
+      repositoryUrl: string,
+      request: string,
+      context?: string | null,
+    ): Promise<ScopeAnalysis> {
+      const stdout = await runPrompt(buildScopeShieldPrompt(repositoryUrl, request, context));
+      return parseScopeOutput(stdout, binary);
+    },
   };
+
+  /**
+   * One `bob run` invocation, shared by both operations so BOB_CLI_PATH,
+   * BOB_MAX_TURNS, BOB_TIMEOUT_MS and the Windows .js handling can never drift
+   * apart between them.
+   */
+  async function runPrompt(prompt: string): Promise<string> {
+    if (!apiKey) {
+      throw new BobProviderError(
+        "BOB_API_KEY is not set. Headless IBM Bob 2.0 runs require it; export it before starting the app.",
+      );
+    }
+
+    return runBob(
+      buildCommand(binary, [
+        "run",
+        "--format",
+        "json",
+        "--max-turns",
+        String(maxTurns),
+        "--disable-mcp",
+        "--disable-subagents",
+        "--workspace",
+        workspace,
+        prompt,
+      ]),
+      binary,
+      timeoutMs,
+      runImpl,
+    );
+  }
 }
 
 type ExecFile = typeof execFile;

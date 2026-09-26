@@ -57,8 +57,8 @@ export type RiskAnalysis = {
   totalItems: number;
 };
 
-/** Layer label as shown in the UI. */
-const DOMAIN_NAMES: Record<DomainId, string> = {
+/** Layer label as shown in the UI. Exported so the provider mapper labels groups the same way. */
+export const DOMAIN_NAMES: Record<DomainId, string> = {
   frontend: "Frontend",
   backend: "Backend",
   database: "Database",
