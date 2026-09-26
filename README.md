@@ -134,7 +134,7 @@ Failure:
 }
 ```
 
-## ScopeShield — Stages 1–4 (input, risk analysis, questions, drafted reply)
+## ScopeShield — Stages 1–6 (input, analysis, questions, reply, context, states)
 
 `/scope-shield` takes a free-text feature request, trims and squeezes the
 whitespace, and stores the result in the browser under the localStorage key
@@ -178,6 +178,36 @@ request implies (Stripe, Twilio, object storage, full-text search, …).
 request, that stack, the risk level, up to four detected hidden-scope items and
 the clarifying questions into an email-shaped message. The UI shows it in an
 editable textarea with "Copy Drafted Reply" and "Reset Draft".
+
+Stage 5 adds the **Detected Repository Context** banner at the top of
+`/scope-shield` and grounds every output in it (FR-7).
+`getRepositoryContext()` in `src/features/scope-shield/stack-context.ts` returns
+the mock repository contract — name, primary stack, auth & middleware
+architecture, primary directories, plus provenance that says plainly that no
+repository was analysed. `formatGroundingNote()` produces the line each section
+prints ("Grounded in Repo Analysis — RepoMap Demo Repository (React 19, Next.js
+16, Node.js 20), plus Stripe."). The shape matches what `/api/repomap` already
+returns, so Stage 5 of the plan swaps the mock for the real analysis.
+
+Stage 6 owns the run lifecycle. `runScopeAnalysis` in
+`src/features/scope-shield/analysis-runner.ts` validates the request, adds the
+latency, runs every mock generator and returns a discriminated outcome
+(`{status:"success"|"error"}`), so the UI drives an explicit
+Idle → Loading → Success | Error state:
+
+| State | What the user sees |
+| --- | --- |
+| Idle | Empty or whitespace input disables the button; typing clears any error |
+| Invalid | Inline message — "Please describe the feature you want to build." when empty, "Please enter a valid feature request." under 10 characters |
+| Loading | Button and textarea disabled, inline spinner, "Analyzing repository and calculating risks…", pulsing skeleton cards |
+| Success | The saved-request confirmation plus the risk, hidden scope, questions and draft sections |
+| Error | Rose banner "Failed to analyze scope. Please try again." with **Try Again** and **Dismiss**; editing the request clears it |
+
+The input is still saved to `localStorage` before the run starts, so a failure
+never loses the request. Failure is deterministic rather than random: a request
+containing `error`, `timeout`, `crash`, `unavailable`, `failed`, `fails` or
+`failure` always fails, which is how the error state is demoed. A stale run that
+finishes after a newer one is discarded.
 
 Every stage so far is a mock: the analysis, the questions and the draft are
 computed in the browser, deterministic, and consult no AI. The real IBM Bob 2.0
@@ -305,15 +335,17 @@ src/
       normalize.ts       Bob answer -> strict RepoMap, diagram derivation
       request.ts         POST body contract
     scope-shield/
+      analysis-runner.ts   Stage 6: validation + mocked run, success/error outcome
       feature-request.ts   Stage 1: localStorage key + text cleanup
       scope-shield.tsx     Stage 1 + 2: input form, loading, result mount
       risk-analysis.ts     Stage 2: mock hidden-scope detector + contract
       risk-analysis-view.tsx Stage 2: risk badge, per-layer hidden-scope cards
       clarifying-questions.ts Stage 3: mock question pool + formatter
       clarifying-questions-view.tsx Stage 3: checklist + Copy Questions button
-      stack-context.ts     Stage 4: mock stack detection (FR-7 grounding)
+      stack-context.ts     Stages 4-5: mock stack detection + repository context
       drafted-reply.ts     Stage 4: mock reply composer
       drafted-reply-view.tsx Stage 4: editable draft + copy/reset buttons
+      repository-context-view.tsx Stage 5: detected context banner (FR-7)
   lib/
     env.ts               Server-side env, validated with zod
     repository-url.ts    Repository input parsing/canonicalisation

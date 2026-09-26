@@ -15,6 +15,9 @@
 
 const NON_WORD = /[^a-z0-9+#.]+/g;
 
+/** Hyphens and underscores read as spaces, so "sign-in" matches "sign in". */
+const HYPHEN = /[-_]+/g;
+
 function words(text: string): string[] {
   return text.toLowerCase().split(NON_WORD).filter(Boolean);
 }
@@ -25,11 +28,12 @@ function words(text: string): string[] {
  */
 export function findSignal(keywords: string[], text: string): string {
   const lower = text.toLowerCase();
+  const spaced = lower.replace(HYPHEN, " ");
   const parts = words(lower);
 
   for (const keyword of keywords) {
     if (keyword.includes(" ")) {
-      if (lower.includes(keyword)) return keyword;
+      if (spaced.includes(keyword)) return keyword;
       continue;
     }
     for (const part of parts) {

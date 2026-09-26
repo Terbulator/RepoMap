@@ -7,8 +7,8 @@
  * the IBM Bob 2.0 provider; `ClarifyingQuestion` is the contract for that call.
  */
 
-import type { DomainId } from "./risk-analysis.ts";
 import { findSignal } from "./keyword-match.ts";
+import type { DomainId } from "./risk-analysis.ts";
 
 export type ClarifyingQuestion = {
   /** Stable id so React keys and the checklist state stay predictable. */
@@ -80,8 +80,11 @@ const QUESTION_POOL: QuestionTemplate[] = [
       "webhook",
       "api",
       "sync",
-      "import",
-      "export",
+      "data import",
+      "import data",
+      "csv import",
+      "export data",
+      "csv export",
     ],
   },
   {
@@ -132,9 +135,10 @@ const QUESTION_POOL: QuestionTemplate[] = [
       "admin",
       "payment",
       "upload",
-      "export",
+      "export data",
       "report",
-      "public",
+      "public api",
+      "public endpoint",
     ],
   },
   {
@@ -210,7 +214,7 @@ const QUESTION_POOL: QuestionTemplate[] = [
     weight: 0,
     keywords: [
       "payment",
-      "pay",
+      "payout",
       "stripe",
       "checkout",
       "billing",
@@ -218,7 +222,9 @@ const QUESTION_POOL: QuestionTemplate[] = [
       "invoice",
       "refund",
       "price",
-      "cart",
+      "shopping cart",
+      "cart page",
+      "add to cart",
     ],
   },
   {
@@ -252,12 +258,15 @@ const QUESTION_POOL: QuestionTemplate[] = [
       "report",
       "search",
       "filter",
-      "list",
       "table",
       "chart",
       "bulk",
       "large",
       "dashboard",
+      "list page",
+      "list view",
+      "user list",
+      "listing",
     ],
   },
 ];
