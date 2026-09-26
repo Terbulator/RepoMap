@@ -1,148 +1,77 @@
 "use client";
 
-import type { Gotcha } from "@/types/onboarding";
-import { SeverityBadge } from "./common";
-import { cn } from "@/lib/cn";
-import { AlertTriangle, AlertCircle, Info, FileCode } from "lucide-react";
-
-const SEVERITY_CONFIG = {
-  high: {
-    icon: AlertTriangle,
-    iconColor: "text-red-500",
-    bg: "bg-red-50 dark:bg-red-900/20",
-    border: "border-red-200 dark:border-red-800",
-    text: "text-red-900 dark:text-red-100",
-    badge: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-  },
-  medium: {
-    icon: AlertCircle,
-    iconColor: "text-amber-500",
-    bg: "bg-amber-50 dark:bg-amber-900/20",
-    border: "border-amber-200 dark:border-amber-800",
-    text: "text-amber-900 dark:text-amber-100",
-    badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  },
-  low: {
-    icon: Info,
-    iconColor: "text-blue-500",
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-    border: "border-blue-200 dark:border-blue-800",
-    text: "text-blue-900 dark:text-blue-100",
-    badge: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  },
-};
+import { RepoMapAnalysis, Gotcha } from "@/types/onboarding";
 
 interface GotchasProps {
-  gotchas: Gotcha[];
+  analysis: RepoMapAnalysis;
 }
 
-export function Gotchas({ gotchas }: GotchasProps) {
-  if (gotchas.length === 0) {
+function getGotchaText(gotcha: string | Gotcha): string {
+  return typeof gotcha === "string" ? gotcha : gotcha.description;
+}
+
+function getGotchaSeverity(gotcha: string | Gotcha): "high" | "medium" | "low" {
+  return typeof gotcha === "string" ? "medium" : gotcha.severity;
+}
+
+function getSeverityColor(severity: "high" | "medium" | "low"): string {
+  switch (severity) {
+    case "high":
+      return "border-red-500/20 bg-red-500/5";
+    case "medium":
+      return "border-amber-500/20 bg-amber-500/5";
+    case "low":
+      return "border-green-500/20 bg-green-500/5";
+  }
+}
+
+export function Gotchas({ analysis }: GotchasProps) {
+  if (analysis.gotchas.length === 0) {
     return (
-      <section className="mb-8 rounded-xl border border-neutral-200 p-6 dark:border-neutral-800 bg-white/50 dark:bg-neutral-950/50">
-        <div className="flex items-center gap-2">
-          <Info className="h-5 w-5 text-neutral-400" />
-          <h2 className="text-lg font-semibold">Common Gotchas</h2>
+      <section aria-labelledby="gotchas-heading" className="space-y-4">
+        <h2 id="gotchas-heading" className="text-lg font-semibold text-white flex items-center gap-2">
+          <span className="w-6 h-6 rounded bg-amber-500/20 flex items-center justify-center">
+            <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </span>
+          Gotchas & Caveats
+        </h2>
+        <div className="text-center py-8 text-neutral-500 border border-dashed border-neutral-800 rounded-xl">
+          <p>No gotchas detected for this repository.</p>
         </div>
-        <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
-          No known gotchas for this repository.
-        </p>
       </section>
     );
   }
 
-  const severityOrder = { high: 0, medium: 1, low: 2 };
-  const sortedGotchas = [...gotchas].sort(
-    (a, b) => severityOrder[a.severity] - severityOrder[b.severity]
-  );
-
-  const highCount = gotchas.filter((g) => g.severity === "high").length;
-  const mediumCount = gotchas.filter((g) => g.severity === "medium").length;
-  const lowCount = gotchas.filter((g) => g.severity === "low").length;
-
   return (
-    <section className="mb-8" aria-labelledby="gotchas-heading">
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-900 dark:bg-white">
-            <AlertTriangle className="h-4 w-4 text-white dark:text-neutral-900" />
-          </div>
-          <h2 id="gotchas-heading" className="text-lg font-semibold tracking-tight">
-            Common Gotchas
-          </h2>
-        </div>
-        <div className="flex items-center gap-2 text-xs">
-          {highCount > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 font-medium">
-              {highCount} High
-            </span>
-          )}
-          {mediumCount > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">
-              {mediumCount} Medium
-            </span>
-          )}
-          {lowCount > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium">
-              {lowCount} Low
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-4" role="list">
-        {sortedGotchas.map((gotcha) => {
-          const config = SEVERITY_CONFIG[gotcha.severity];
-          const Icon = config.icon;
-
+    <section aria-labelledby="gotchas-heading" className="space-y-4">
+      <h2 id="gotchas-heading" className="text-lg font-semibold text-white flex items-center gap-2">
+        <span className="w-6 h-6 rounded bg-amber-500/20 flex items-center justify-center">
+          <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </span>
+        Gotchas & Caveats
+        <span className="text-sm font-normal text-neutral-500">({analysis.gotchas.length})</span>
+      </h2>
+      <div className="space-y-2" role="list">
+        {analysis.gotchas.map((gotcha, index) => {
+          const text = getGotchaText(gotcha);
+          const severity = getGotchaSeverity(gotcha);
+          const severityColor = getSeverityColor(severity);
           return (
             <article
-              key={gotcha.id}
-              className={cn(
-                "relative rounded-xl border p-5 transition-all",
-                config.bg,
-                config.border
-              )}
+              key={index}
+              className={`p-4 rounded-xl flex gap-3 ${severityColor}`}
               role="listitem"
             >
-              <div className="flex items-start gap-4">
-                <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", config.iconColor)}>
-                  <Icon className="h-4.5 w-4.5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className={cn("font-semibold text-sm", config.text)}>
-                          {gotcha.title}
-                        </h3>
-                        <SeverityBadge severity={gotcha.severity} />
-                      </div>
-                      <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed">
-                        {gotcha.description}
-                      </p>
-                    </div>
-                  </div>
-                  {gotcha.filePaths.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {gotcha.filePaths.map((path) => (
-                        <a
-                          key={path}
-                          href="#"
-                          className={cn(
-                            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition-colors",
-                            "bg-white/50 dark:bg-neutral-900/50",
-                            "hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                          )}
-                        >
-                          <FileCode className="h-3 w-3" />
-                          <span>{path}</span>
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                </div>
+              <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                <svg className="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
               </div>
+              <p className="text-sm text-neutral-300 flex-1">{text}</p>
             </article>
           );
         })}

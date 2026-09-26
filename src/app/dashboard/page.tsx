@@ -1,15 +1,7 @@
-import type { Metadata } from "next";
-import { OnboardingMap } from "@/features/onboarding-map/onboarding-map";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Dashboard",
-  description: "Analyze a repository and explore its Onboarding Map.",
-};
+import { OnboardingMap } from "@/components/onboarding/OnboardingMap";
 
 export default function DashboardPage() {
-  return (
-    <div className="mx-auto max-w-6xl px-6 py-10">
-      <OnboardingMap />
-    </div>
-  );
+  return <OnboardingMap />;
 }
