@@ -14,6 +14,9 @@ const serverEnvSchema = z.object({
   BOB_CLI_PATH: z.string().min(1).default("bob"),
   BOB_MAX_TURNS: z.coerce.number().int().positive().default(8),
   BOB_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
+  BOB_API_KEY: z.string().min(1).optional(),
+  BOB_ENDPOINT: z.string().url().optional(),
+  BOB_SCOPE_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -25,4 +28,7 @@ export const env: ServerEnv = serverEnvSchema.parse({
   BOB_CLI_PATH: process.env.BOB_CLI_PATH || undefined,
   BOB_MAX_TURNS: process.env.BOB_MAX_TURNS || undefined,
   BOB_TIMEOUT_MS: process.env.BOB_TIMEOUT_MS || undefined,
+  BOB_API_KEY: process.env.BOB_API_KEY || undefined,
+  BOB_ENDPOINT: process.env.BOB_ENDPOINT || undefined,
+  BOB_SCOPE_TIMEOUT_MS: process.env.BOB_SCOPE_TIMEOUT_MS || undefined,
 });

@@ -362,8 +362,10 @@ src/
 | `REPOMAP_PROVIDER` | `mock` | `mock` (fixture) or `bob-2.0` (real CLI). |
 | `BOB_CLI_PATH` | `bob` | Path to the Bob CLI. On Windows use the `bobshell/dist/bob.js` entry (see below). |
 | `BOB_API_KEY` | — | **Required** for `bob-2.0`. Read from the environment by the CLI; never committed, never sent to the browser. |
+| `BOB_ENDPOINT` | — | IBM Bob 2.0 HTTP API endpoint for live ScopeShield scope analysis. When unset, ScopeShield falls back to deterministic mock generators. |
 | `BOB_MAX_TURNS` | `8` | Turn limit for one analysis. |
 | `BOB_TIMEOUT_MS` | `300000` | Aborts a Bob run. One observed analysis took over 4 minutes. |
+| `BOB_SCOPE_TIMEOUT_MS` | `15000` | Timeout for the ScopeShield live scope-analysis call to Bob 2.0 (ms). |
 | `REPOMAP_WORKSPACE_DIR` | — | Analyse this local checkout instead of cloning. |
 | `REPOMAP_CLONE_TIMEOUT_MS` | `120000` | Timeout for the shallow clone. |
 
