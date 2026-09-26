@@ -103,7 +103,7 @@ nodes and edges onto React Flow when the UI work starts.
 
 Liveness plus whether Bob 2.0 is configured.
 
-## ScopeShield — Stage 1 (feature request input)
+## ScopeShield — Stage 1 (feature request input) and Stage 2 (risk analysis)
 
 `/scope-shield` takes a free-text feature request, trims and squeezes the
 whitespace, and stores the result in the browser under the localStorage key
@@ -111,7 +111,15 @@ whitespace, and stores the result in the browser under the localStorage key
 want to build." A successful submit shows "Feature request stored successfully!"
 and logs the request to the browser console. The stored value is also printed
 with `localStorage.getItem("featureRequest")` in DevTools → Application → Local
-Storage. No analysis, AI call, auth, or database is part of this stage.
+Storage.
+
+Stage 2 adds a **mock** risk analysis below the input. `analyzeFeatureRequest`
+in `src/features/scope-shield/risk-analysis.ts` maps keywords in the request onto
+structured templates and returns a risk level (HIGH/MEDIUM/LOW) plus hidden work
+grouped by backend, database, frontend, infrastructure and security. It is
+deterministic and consults no AI; Stage 3 replaces it with the IBM Bob 2.0
+provider, and the returned `RiskAnalysis` shape is the contract that call must
+satisfy. No auth, database, or Tier 2/3 work is in either stage.
 
 ## IBM Bob 2.0 integration
 
@@ -156,6 +164,7 @@ src/
     layout.tsx           Root layout, header, footer
     page.tsx             Landing page
     dashboard/page.tsx   Dashboard shell (still empty)
+    scope-shield/page.tsx ScopeShield Stage 1 + 2 UI
     api/health/route.ts  Health check route
     api/repomap/route.ts POST /api/repomap — repo map generation (M1)
   components/
@@ -166,6 +175,11 @@ src/
       schema.ts          RepoMap + Bob analysis contracts (zod)
       normalize.ts       Bob answer -> strict RepoMap, diagram derivation
       request.ts         POST body contract
+    scope-shield/
+      feature-request.ts   Stage 1: localStorage key + text cleanup
+      scope-shield.tsx     Stage 1 + 2: input form, loading, result mount
+      risk-analysis.ts     Stage 2: mock analysis generator + contract
+      risk-analysis-view.tsx Stage 2: risk badge and per-domain cards
   lib/
     env.ts               Server-side env, validated with zod
     repository-url.ts    Repository input parsing/canonicalisation

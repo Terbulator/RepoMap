@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   EMPTY_REQUEST_MESSAGE,
@@ -8,18 +8,36 @@ import {
   isEmptyFeatureRequest,
   saveFeatureRequest,
 } from "@/features/scope-shield/feature-request";
+import type { RiskAnalysis } from "@/features/scope-shield/risk-analysis";
+import { analyzeFeatureRequest } from "@/features/scope-shield/risk-analysis";
+import { RiskAnalysisView } from "@/features/scope-shield/risk-analysis-view";
+
+/** Fake latency so the loading state is visible. Stage 3 replaces this. */
+const MOCK_ANALYSIS_DELAY_MS = 900;
 
 /**
- * Stage 1 of ScopeShield (PRD 5.2): capture the free-text feature request.
+ * ScopeShield (PRD 5.2).
  *
- * The request is normalised, stored in localStorage under "featureRequest" and
- * echoed back for confirmation. No analysis happens here yet.
+ * Stage 1 captures the free-text feature request and stores it in localStorage
+ * under "featureRequest". Stage 2 renders a MOCK risk analysis per technical
+ * layer. No IBM Bob 2.0 call happens yet.
  */
 export function ScopeShield() {
   const [text, setText] = useState("");
   const [submittedRequest, setSubmittedRequest] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [message, setMessage] = useState("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<RiskAnalysis | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timer.current) {
+        clearTimeout(timer.current);
+      }
+    };
+  }, []);
 
   const isEmpty = isEmptyFeatureRequest(text);
 
@@ -39,6 +57,12 @@ export function ScopeShield() {
     setSubmittedRequest(request);
     setIsSubmitted(true);
     setMessage(STORED_REQUEST_MESSAGE);
+
+    setIsAnalyzing(true);
+    timer.current = setTimeout(() => {
+      setAnalysis(analyzeFeatureRequest(request));
+      setIsAnalyzing(false);
+    }, MOCK_ANALYSIS_DELAY_MS);
   }
 
   return (
@@ -63,10 +87,10 @@ export function ScopeShield() {
         <div className="mt-4 flex flex-wrap items-center gap-4">
           <button
             type="submit"
-            disabled={isEmpty}
+            disabled={isEmpty || isAnalyzing}
             className="rounded-md bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
           >
-            Analyze Scope
+            {isAnalyzing ? "Analyzing Scope…" : "Analyze Scope"}
           </button>
           {message && !isSubmitted ? (
             <p
@@ -80,6 +104,21 @@ export function ScopeShield() {
         </div>
       </form>
 
+      {isAnalyzing ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mt-6 flex items-center gap-3 text-sm text-neutral-600 dark:text-neutral-300"
+        >
+          <span
+            aria-hidden="true"
+            className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-400 border-t-transparent"
+          />
+          Reading the request for hidden work across backend, database,
+          frontend, infrastructure and security…
+        </div>
+      ) : null}
+
       {isSubmitted ? (
         <div
           id="feature-request-status"
@@ -92,10 +131,11 @@ export function ScopeShield() {
           </p>
           <p className="mt-2 text-xs text-neutral-500">
             Stored in localStorage under the key &quot;featureRequest&quot;.
-            Scope analysis is not built yet.
           </p>
         </div>
       ) : null}
+
+      {analysis && !isAnalyzing ? <RiskAnalysisView analysis={analysis} /> : null}
     </section>
   );
 }
