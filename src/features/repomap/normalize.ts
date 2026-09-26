@@ -1,28 +1,29 @@
 import {
-  bobAnalysisSchema,
+  providerAnalysisSchema,
   repoMapSchema,
-  type BobAnalysis,
+  type Provenance,
+  type ProviderAnalysis,
+  type Relationship,
   type RepoMap,
-  type RepoMapEdge,
-  type RepoMapNode,
-  type RepoMapProvenance,
+  type RepoMapModule,
+  type RepositoryRef,
 } from "./schema.ts";
 
 const MAX_RECOMMENDED_FILES = 3;
-const MAX_GOTCHAS = 6;
-
-/** Thrown when a Bob 2.0 response carries no usable map content at all. */
-export class EmptyRepoMapAnalysisError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "EmptyRepoMapAnalysisError";
-  }
-}
+const MAX_GOTCHAS = 8;
 
 export type NormalizeInput = {
-  repository: RepoMap["repository"];
-  provenance: RepoMapProvenance;
+  repository: RepositoryRef;
+  provenance: Provenance;
 };
+
+/** Thrown when a provider answer carries no usable map content at all. */
+export class InvalidAnalysisError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidAnalysisError";
+  }
+}
 
 function slugify(value: string): string {
   return value
@@ -37,141 +38,117 @@ function nonEmpty(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
 
+function dedupeById<T extends { id: string }>(items: T[]): T[] {
+  return items.filter((item, index) => items.findIndex((other) => other.id === item.id) === index);
+}
+
 /**
- * Turns a raw IBM Bob 2.0 analysis into the strict RepoMap contract.
- * Anything missing is derived or dropped rather than thrown, so one imperfect
- * module in the model response cannot fail the whole request.
+ * Converts whatever a provider returned into the strict RepoMap contract.
+ * Missing or duplicated fields are repaired here rather than trusted, and an
+ * answer with no usable content raises InvalidAnalysisError instead of being
+ * padded with invented data.
  */
 export function toRepoMap(raw: unknown, input: NormalizeInput): RepoMap {
-  const analysis: BobAnalysis = bobAnalysisSchema.parse(raw ?? {});
+  const analysis: ProviderAnalysis = providerAnalysisSchema.parse(raw ?? {});
 
-  const modules = analysis.modules
-    .map((module) => {
-      const path = module.path.trim();
-      const name = module.name.trim() || path.split("/").pop() || "root";
-      return {
-        id: slugify(path || name) || "root",
-        name,
-        path: path || name,
-        responsibility: module.responsibility.trim() || "Not described by Bob 2.0.",
-        entryPoints: nonEmpty(module.entryPoints),
-        dependsOn: nonEmpty(module.dependsOn),
-      };
-    })
-    .filter((module) => module.path !== "" || module.name !== "root")
-    .filter((module, index, all) => all.findIndex((m) => m.id === module.id) === index);
+  const modules = dedupeById(
+    (analysis.modules ?? [])
+      .map((module) => {
+        const path = (module.path ?? "").trim();
+        const name = (module.name ?? "").trim() || path.split("/").pop() || path;
+        return {
+          id: slugify(module.id?.trim() || path || name) || "root",
+          name,
+          path: path || name,
+          purpose: (module.purpose ?? module.responsibility ?? "").trim() || "Not described.",
+          files: nonEmpty(module.files ?? module.entryPoints ?? []),
+          dependencies: nonEmpty(module.dependencies ?? module.dependsOn ?? []),
+        };
+      })
+      .filter((module) => module.path !== "" || module.name !== ""),
+  );
 
-  const recommendedFiles = nonEmpty(analysis.recommendedFiles.map((file) => file.path))
+  const recommendedFiles = nonEmpty(
+    (analysis.recommendedFiles ?? [])
+      .map((file) => (file.path ?? "").trim())
+      .filter(Boolean),
+  )
     .slice(0, MAX_RECOMMENDED_FILES)
-    .map((path, index) => ({
-      rank: index + 1,
-      path,
-      why:
-        analysis.recommendedFiles.find((file) => file.path.trim() === path)?.why.trim() ||
-        "Recommended starting point identified by Bob 2.0.",
-    }));
+    .map((path, index) => {
+      const match = (analysis.recommendedFiles ?? []).find(
+        (file) => (file.path ?? "").trim() === path,
+      );
+      return {
+        path,
+        reason: (match?.reason ?? match?.why ?? "").trim() || "Recommended starting file.",
+        rank: index + 1,
+      };
+    });
 
-  const gotchas = analysis.gotchas
-    .map((gotcha) => ({ title: gotcha.title.trim(), detail: gotcha.detail.trim() }))
-    .filter((gotcha) => gotcha.title !== "" && gotcha.detail !== "")
+  const gotchas = (analysis.gotchas ?? [])
+    .map((gotcha) =>
+      typeof gotcha === "string"
+        ? gotcha.trim()
+        : [gotcha.title?.trim() ?? "", gotcha.detail?.trim() ?? ""].filter(Boolean).join(" — "),
+    )
+    .filter(Boolean)
     .slice(0, MAX_GOTCHAS);
 
   if (modules.length === 0) {
-    throw new EmptyRepoMapAnalysisError(
-      `IBM Bob 2.0 returned no usable modules for ${input.repository.slug}.`,
+    throw new InvalidAnalysisError(
+      `The analysis provider returned no usable modules for ${input.repository.slug}.`,
     );
   }
-
   if (recommendedFiles.length === 0) {
-    throw new EmptyRepoMapAnalysisError(
-      `IBM Bob 2.0 returned no recommended starting files for ${input.repository.slug}.`,
+    throw new InvalidAnalysisError(
+      `The analysis provider returned no recommended starting files for ${input.repository.slug}.`,
     );
   }
 
-  const { nodes, edges } = buildDiagram(modules, recommendedFiles.map((file) => file.path));
+  const projectSummary =
+    (analysis.projectSummary ?? analysis.summary ?? "").trim() ||
+    `No summary was produced for ${input.repository.name}.`;
 
   return repoMapSchema.parse({
     schemaVersion: 1,
     repository: input.repository,
     provenance: input.provenance,
-    summary: analysis.summary.trim() || `No summary was produced for ${input.repository.name}.`,
-    stack: nonEmpty(analysis.stack),
+    projectSummary,
+    stack: nonEmpty(analysis.stack ?? []),
     modules,
     recommendedFiles,
-    diagram: { nodes, edges },
     gotchas,
+    relationships: deriveRelationships(modules, analysis),
   });
 }
 
-type DiagramInput = {
-  id: string;
-  name: string;
-  path: string;
-  entryPoints: string[];
-  dependsOn: string[];
-}[];
+function deriveRelationships(modules: RepoMapModule[], analysis: ProviderAnalysis): Relationship[] {
+  const explicit = (analysis.relationships ?? [])
+    .map((relationship) => ({
+      source: (relationship.source ?? "").trim(),
+      target: (relationship.target ?? "").trim(),
+      type: (relationship.type ?? relationship.relation ?? "depends-on").trim() || "depends-on",
+    }))
+    .filter((relationship) => relationship.source !== "" && relationship.target !== "");
 
-function buildDiagram(modules: DiagramInput, recommendedFiles: string[]) {
-  const nodes: RepoMapNode[] = [];
-  const edges: RepoMapEdge[] = [];
-  const seenNodes = new Set<string>();
-  const seenEdges = new Set<string>();
-
-  const addNode = (node: RepoMapNode) => {
-    if (seenNodes.has(node.id)) return;
-    seenNodes.add(node.id);
-    nodes.push(node);
-  };
-
-  const addEdge = (source: string, target: string, relation: RepoMapEdge["relation"]) => {
-    if (source === target) return;
-    const id = `${source}->${target}:${relation}`;
-    if (seenEdges.has(id)) return;
-    seenEdges.add(id);
-    edges.push({ id, source, target, relation });
-  };
-
-  const fileNodeId = (path: string) => `file:${slugify(path)}`;
-
-  for (const path of recommendedFiles) {
-    addNode({
-      id: fileNodeId(path),
-      label: path.split("/").pop() || path,
-      kind: "file",
-      path,
-    });
-  }
-
-  for (const mod of modules) {
-    addNode({ id: mod.id, label: mod.name, kind: "module", path: mod.path });
-  }
-
-  for (const mod of modules) {
-    for (const entryPoint of mod.entryPoints) {
-      addNode({
-        id: fileNodeId(entryPoint),
-        label: entryPoint.split("/").pop() || entryPoint,
-        kind: "file",
-        path: entryPoint,
-      });
-      addEdge(mod.id, fileNodeId(entryPoint), "contains");
-    }
-  }
+  const seen = new Set(explicit.map((rel) => `${rel.source}->${rel.target}:${rel.type}`));
+  const derived: Relationship[] = [];
 
   const moduleIds = new Set(modules.map((mod) => mod.id));
+
   for (const mod of modules) {
-    for (const dependency of mod.dependsOn) {
-      const target = slugify(dependency);
-      if (moduleIds.has(target)) {
-        addEdge(mod.id, target, "depends-on");
-        continue;
-      }
-      const byName = modules.find(
-        (candidate) => candidate.name.toLowerCase() === dependency.toLowerCase(),
-      );
-      if (byName) addEdge(mod.id, byName.id, "depends-on");
+    for (const dependency of mod.dependencies) {
+      const target = moduleIds.has(slugify(dependency))
+        ? slugify(dependency)
+        : (modules.find((candidate) => candidate.name.toLowerCase() === dependency.toLowerCase())?.id ??
+          "");
+      if (target === "") continue;
+      const key = `${mod.id}->${target}:depends-on`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      derived.push({ source: mod.id, target, type: "depends-on" });
     }
   }
 
-  return { nodes, edges };
+  return [...explicit, ...derived];
 }

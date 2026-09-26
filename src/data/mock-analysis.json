@@ -1,0 +1,77 @@
+{
+  "projectSummary": "Mock fixture for RepoMap development. This is a small demo service used to exercise the Onboarding Map UI without calling IBM Bob 2.0: a tiny HTTP API with one web tier, one domain module and one shared module.",
+  "stack": ["TypeScript", "Node.js", "Express", "Vitest", "Docker"],
+  "modules": [
+    {
+      "id": "src-web",
+      "name": "web",
+      "path": "src/web",
+      "purpose": "Starts the HTTP server, wires routes and renders the demo HTML page.",
+      "files": ["src/web/server.ts", "src/web/routes.ts"],
+      "dependencies": ["src-core"]
+    },
+    {
+      "id": "src-core",
+      "name": "core",
+      "path": "src/core",
+      "purpose": "Holds the domain logic: the catalogue, pricing rules and validation.",
+      "files": ["src/core/catalogue.ts", "src/core/pricing.ts"],
+      "dependencies": []
+    },
+    {
+      "id": "src-shared",
+      "name": "shared",
+      "path": "src/shared",
+      "purpose": "Shared helpers and error types used by every other module.",
+      "files": ["src/shared/errors.ts", "src/shared/logger.ts"],
+      "dependencies": []
+    },
+    {
+      "id": "tests",
+      "name": "tests",
+      "path": "tests",
+      "purpose": "Integration and unit tests; the only place that exercises the whole request path.",
+      "files": ["tests/api.test.ts", "tests/pricing.test.ts"],
+      "dependencies": ["src-web"]
+    }
+  ],
+  "recommendedFiles": [
+    {
+      "path": "README.md",
+      "reason": "Explains how to install and run the demo service.",
+      "rank": 1
+    },
+    {
+      "path": "src/web/server.ts",
+      "reason": "Entry point of the service and the first file to read.",
+      "rank": 2
+    },
+    {
+      "path": "src/core/catalogue.ts",
+      "reason": "The domain model everything else is built around.",
+      "rank": 3
+    }
+  ],
+  "gotchas": [
+    "The demo service reads PORT from the environment and defaults to 3000, which collides with the RepoMap frontend during the demo.",
+    "tests/api.test.ts starts a real server on a fixed port, so it fails if another instance is already running.",
+    "src/shared/logger.ts writes to stdout in plain text, so log parsing in the demo needs a prefix filter."
+  ],
+  "relationships": [
+    {
+      "source": "src-web",
+      "target": "src-core",
+      "type": "depends-on"
+    },
+    {
+      "source": "src-web",
+      "target": "src-shared",
+      "type": "depends-on"
+    },
+    {
+      "source": "tests",
+      "target": "src-web",
+      "type": "depends-on"
+    }
+  ]
+}

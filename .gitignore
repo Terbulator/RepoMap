@@ -34,6 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# local clones of repositories being analysed
+/.repomap-cache/
+
 # vercel
 .vercel
 
