@@ -1,19 +1,28 @@
 import { z } from "zod";
 
 /**
- * Server-side environment placeholders for the IBM Bob 2.0 integration.
- * All values are optional so the app builds and runs before integration exists.
+ * Server-side configuration.
+ *
+ * REPOMAP_PROVIDER picks the analysis provider: "mock" (default, checked-in
+ * fixture) or "bob-2.0" (the installed IBM Bob CLI). There is no invented Bob
+ * HTTP endpoint here on purpose — the CLI is the verified integration path.
  */
 const serverEnvSchema = z.object({
-  BOB_API_BASE_URL: z.string().url().optional(),
-  BOB_API_KEY: z.string().min(1).optional(),
-  BOB_PROJECT_ID: z.string().min(1).optional(),
+  REPOMAP_PROVIDER: z.enum(["mock", "bob-2.0"]).default("mock"),
+  REPOMAP_WORKSPACE_DIR: z.string().min(1).optional(),
+  REPOMAP_CLONE_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  BOB_CLI_PATH: z.string().min(1).default("bob"),
+  BOB_MAX_TURNS: z.coerce.number().int().positive().default(8),
+  BOB_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
 export const env: ServerEnv = serverEnvSchema.parse({
-  BOB_API_BASE_URL: process.env.BOB_API_BASE_URL || undefined,
-  BOB_API_KEY: process.env.BOB_API_KEY || undefined,
-  BOB_PROJECT_ID: process.env.BOB_PROJECT_ID || undefined,
+  REPOMAP_PROVIDER: process.env.REPOMAP_PROVIDER || undefined,
+  REPOMAP_WORKSPACE_DIR: process.env.REPOMAP_WORKSPACE_DIR || undefined,
+  REPOMAP_CLONE_TIMEOUT_MS: process.env.REPOMAP_CLONE_TIMEOUT_MS || undefined,
+  BOB_CLI_PATH: process.env.BOB_CLI_PATH || undefined,
+  BOB_MAX_TURNS: process.env.BOB_MAX_TURNS || undefined,
+  BOB_TIMEOUT_MS: process.env.BOB_TIMEOUT_MS || undefined,
 });
