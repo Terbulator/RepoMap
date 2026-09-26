@@ -7,10 +7,10 @@
  * rewrite the wording, but the inputs and the shape stay the same.
  */
 
-import type { ClarifyingQuestion } from "@/features/scope-shield/clarifying-questions";
-import type { RiskAnalysis } from "@/features/scope-shield/risk-analysis";
-import type { StackContext } from "@/features/scope-shield/stack-context";
-import { formatStack } from "@/features/scope-shield/stack-context";
+import type { ClarifyingQuestion } from "./clarifying-questions.ts";
+import type { RiskAnalysis } from "./risk-analysis.ts";
+import type { StackContext } from "./stack-context.ts";
+import { formatStack } from "./stack-context.ts";
 
 export type DraftedReplyInput = {
   request: string;
