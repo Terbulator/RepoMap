@@ -14,8 +14,9 @@ export default function ScopeShieldPage() {
         Stage 1 — feature request input, stored in your browser. Stage 2 —
         hidden scope per architectural layer. Stage 3 — clarifying questions.
         Stage 4 — a drafted professional reply. Stage 5 — the detected
-        repository context every output is grounded in. Stages 2–5 are mock
-        templates computed in the browser; no AI is called.
+        repository context every output is grounded in. Stage 6 — loading,
+        validation and error states. Stages 2–6 are mock templates computed in
+        the browser; no AI is called.
       </p>
 
       <div className="mt-8">
