@@ -56,6 +56,27 @@ test("questions are never repeated and carry a reason", () => {
   }
 });
 
+test("a prefix collision in a keyword cannot be reported as a match", () => {
+  // "important" starts with "import" and "publication" starts with "public".
+  // Both questions may still appear as fallbacks, but neither may claim the
+  // request raised it.
+  const important = generateClarifyingQuestions("This is important for the team");
+  assert.ok(
+    !important.some((question) => question.why.includes('"import"')),
+    "important must not be reported as an import signal",
+  );
+
+  const publication = generateClarifyingQuestions("Add a publication feed");
+  assert.ok(
+    !publication.some((question) => question.why.includes('"public"')),
+    "publication must not be reported as a public signal",
+  );
+});
+
+test("hyphenated words still match their spaced keyword", () => {
+  assert.ok(ids("Add sign-in and sign-up").includes("session-lifetime"));
+});
+
 test("a vague request still gets the always-applicable questions", () => {
   const found = ids("Make it better");
   assert.ok(found.includes("scope-boundary"));

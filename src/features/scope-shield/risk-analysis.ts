@@ -13,6 +13,8 @@
  * returned `RiskAnalysis` shape is the contract that call must satisfy.
  */
 
+// Relative, with the extension, so `node --test` can load this module directly.
+// Same convention as src/features/repomap/normalize.ts.
 import { findSignal, matchesAny } from "./keyword-match.ts";
 
 export type RiskLevel = "HIGH" | "MEDIUM" | "LOW";
@@ -148,16 +150,21 @@ const PRESETS: Preset[] = [
   {
     id: "payments",
     label: "payments",
+    // "pay" is deliberately absent: word-prefix matching would fire on "payroll".
+    // "cart" is deliberately absent for the same reason ("cartoons"); "checkout"
+    // still covers most shopping-cart work.
     keywords: [
       "payment",
-      "pay",
+      "payout",
       "stripe",
       "checkout",
       "billing",
       "subscription",
       "invoice",
       "refund",
-      "cart",
+      "shopping cart",
+      "cart page",
+      "add to cart",
       "price",
       "pricing",
     ],
@@ -255,7 +262,15 @@ const TRIGGERS: Array<{
 }> = [
   {
     domain: "frontend",
-    keywords: ["validation", "validate", "form", "input", "search", "filter"],
+    keywords: [
+      "validation",
+      "validate",
+      "form validation",
+      "form field",
+      "input",
+      "search",
+      "filter",
+    ],
     item: {
       title: "Validation rules on both sides",
       detail:
@@ -265,7 +280,21 @@ const TRIGGERS: Array<{
   },
   {
     domain: "frontend",
-    keywords: ["page", "screen", "dashboard", "panel", "modal", "list", "table", "report", "settings"],
+    // "list" is deliberately absent: it would fire on "listener" and "playlist".
+    keywords: [
+      "page",
+      "screen",
+      "dashboard",
+      "panel",
+      "modal",
+      "table",
+      "report",
+      "settings",
+      "list page",
+      "list view",
+      "user list",
+      "listing",
+    ],
     item: {
       title: "Extra UI surfaces and their states",
       detail:
@@ -275,7 +304,25 @@ const TRIGGERS: Array<{
   },
   {
     domain: "backend",
-    keywords: ["api", "endpoint", "route", "webhook", "cron", "schedule", "sync", "import", "export", "notify", "email"],
+    keywords: [
+      "api",
+      "endpoint",
+      "route",
+      "webhook",
+      "cron",
+      "schedule",
+      "async",
+      "synchron",
+      "data import",
+      "import data",
+      "csv import",
+      "bulk import",
+      "export data",
+      "csv export",
+      "bulk export",
+      "notify",
+      "email",
+    ],
     item: {
       title: "Endpoint contract and background processing",
       detail:

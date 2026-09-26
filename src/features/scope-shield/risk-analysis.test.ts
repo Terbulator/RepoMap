@@ -93,6 +93,41 @@ test("no duplicate item titles inside a layer", () => {
   }
 });
 
+test("a prefix collision in a keyword cannot fire an item", () => {
+  // "payroll" starts with "pay" and "cartoons" with "cart"; neither may drag in
+  // the payments preset, and "listener" may not be read as a "list" signal.
+  const payroll = analyzeFeatureRequest("Add payroll exports for the finance department");
+  assert.equal(payroll.riskLevel, "LOW");
+  assert.ok(
+    !payroll.domains.some((domain) =>
+      domain.items.some((item) => item.source === "preset"),
+    ),
+    "payroll must not match the payments preset",
+  );
+
+  const cartoons = analyzeFeatureRequest("Add cartoon avatars for the profile page");
+  assert.ok(
+    !cartoons.domains.some((domain) =>
+      domain.items.some((item) => item.source === "preset"),
+    ),
+    "cartoons must not match the payments preset",
+  );
+
+  const listener = analyzeFeatureRequest("Add an event listener for the socket");
+  assert.ok(
+    !listener.domains.some((domain) =>
+      domain.items.some((item) => item.signal === "list"),
+    ),
+    "listener must not be reported as a list signal",
+  );
+});
+
+test("real payment wording still matches the payments preset", () => {
+  const analysis = analyzeFeatureRequest("Add a shopping cart page with Stripe checkout");
+  assert.ok(hasItem(analysis, "security", "Webhook signature verification"));
+  assert.ok(hasItem(analysis, "backend", "Idempotent charge flow"));
+});
+
 test("a request touching many layers is high risk", () => {
   const analysis = analyzeFeatureRequest(
     "Add authentication with Stripe checkout, user roles and a webhook",

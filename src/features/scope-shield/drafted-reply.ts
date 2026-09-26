@@ -9,14 +9,16 @@
 
 import type { ClarifyingQuestion } from "./clarifying-questions.ts";
 import type { RiskAnalysis } from "./risk-analysis.ts";
-import type { StackContext } from "./stack-context.ts";
 import { formatStack } from "./stack-context.ts";
+import type { StackContext } from "./stack-context.ts";
 
 export type DraftedReplyInput = {
   request: string;
   stack: StackContext;
   analysis: RiskAnalysis;
   questions: ClarifyingQuestion[];
+  /** FR-7 grounding line, e.g. "Grounded in Repo Analysis — …". */
+  grounding?: string;
 };
 
 /** How many hidden-scope items the draft names before it asks its questions. */
@@ -59,6 +61,7 @@ export function buildDraftedReply({
   stack,
   analysis,
   questions,
+  grounding,
 }: DraftedReplyInput): string {
   const stackLine = formatStack(stack);
   const items = calledOutItems(analysis);
@@ -74,6 +77,11 @@ export function buildDraftedReply({
   lines.push(
     `Before we begin implementation, we reviewed the request against our current codebase architecture (${stackLine}). To prevent scope creep and keep the change stable inside the existing system, we need to clarify a few points first.`,
   );
+
+  if (grounding) {
+    lines.push("");
+    lines.push(grounding);
+  }
 
   if (items.length > 0) {
     lines.push("");

@@ -53,7 +53,7 @@ const STACK_SIGNALS: Array<{
     add: { integrations: ["Realtime transport"] },
   },
   {
-    keywords: ["ai", "llm", "model", "openai", "summar"],
+    keywords: ["llm", "model", "openai", "ai model", "summar"],
     add: { integrations: ["Model provider"] },
   },
 ];
@@ -95,4 +95,77 @@ export function formatStack(stack: StackContext): string {
   return [...stack.languages, ...stack.frameworks, ...stack.data, ...stack.integrations].join(
     ", ",
   );
+}
+
+/**
+ * The repository ScopeShield is reasoning about (PRD 5.1 output consumed by
+ * ScopeShield, FR-7).
+ *
+ * MOCK data shaped like a RepoMap contract: repository, stack, auth
+ * architecture, directories and provenance. Stage 5 replaces this with the real
+ * `/api/repomap` response, which already carries stack, modules and entryPoints.
+ */
+export type RepositoryContext = {
+  repositoryName: string;
+  primaryStack: string[];
+  authArchitecture: string[];
+  directories: string[];
+  provenance: {
+    source: string;
+    analyzedAt: string;
+    moduleCount: number;
+    note: string;
+  };
+};
+
+const REPOSITORY_CONTEXT: RepositoryContext = {
+  repositoryName: "RepoMap Demo Repository",
+  primaryStack: [
+    "React 19",
+    "Next.js 16",
+    "Node.js 20",
+    "PostgreSQL 16",
+    "Prisma 6",
+    "Tailwind CSS",
+  ],
+  authArchitecture: [
+    "JWT authentication",
+    "Route guard middleware",
+    "Token refresh flow",
+    "Role-based access checks",
+  ],
+  directories: [
+    "/src/app",
+    "/src/components",
+    "/src/api",
+    "/server/routes",
+    "/src/lib",
+  ],
+  provenance: {
+    source: "Repo map analysis (mock)",
+    analyzedAt: "2026-09-26T00:00:00Z",
+    moduleCount: 5,
+    note: "Static demo data. No repository was analysed and no AI was consulted.",
+  },
+};
+
+export function getRepositoryContext(): RepositoryContext {
+  return REPOSITORY_CONTEXT;
+}
+
+/**
+ * The line that ties an output back to the repository it was derived from,
+ * e.g. "Grounded in Repo Analysis — RepoMap Demo Repository (React 19, Next.js
+ * 16, Node.js 20), plus Stripe."
+ */
+export function formatGroundingNote(
+  context: RepositoryContext,
+  stack: StackContext,
+): string {
+  const base = context.primaryStack.slice(0, 3).join(", ");
+  const inferred = stack.integrations.length
+    ? `, plus ${stack.integrations.join(", ")}`
+    : "";
+
+  return `Grounded in Repo Analysis — ${context.repositoryName} (${base}${inferred}).`;
 }
