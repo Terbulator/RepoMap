@@ -40,7 +40,7 @@ export function extractJsonPayload(value: unknown): unknown {
 
   if (typeof value === "object") {
     const record = value as Record<string, unknown>;
-    for (const key of ["data", "result", "output", "analysis", "repository"]) {
+    for (const key of ["data", "result", "output", "analysis", "repository", "last_message"]) {
       if (record[key] != null) {
         const extracted = extractJsonPayload(record[key]);
         if (extracted != null) return extracted;

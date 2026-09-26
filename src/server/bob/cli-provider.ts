@@ -85,7 +85,7 @@ function runBob(
   runImpl: ExecFile,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    runImpl(
+    const child = runImpl(
       command.file,
       command.args,
       { timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, windowsHide: true },
@@ -98,5 +98,9 @@ function runBob(
         resolve(String(stdout));
       },
     );
+    // `bob run` reads stdin to EOF unless stdin is a TTY, and execFile gives it a pipe it never
+    // ends, so the CLI waits forever and the request only ends at the timeout. Closing stdin
+    // makes it resolve immediately with an empty string.
+    child.stdin?.end();
   });
 }

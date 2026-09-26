@@ -33,6 +33,21 @@ test("reads JSON wrapped in a fence inside an envelope", () => {
   assert.equal(parseBobOutput(output).projectSummary, "A demo service.");
 });
 
+test("reads the `bob run --format json` result envelope", () => {
+  const stdout = JSON.stringify({
+    type: "result",
+    timestamp: "2026-01-01T00:00:00.000Z",
+    status: "success",
+    stats: { task_id: "task_3", duration_ms: 34_957, session_costs: 0.13, tool_calls: 12 },
+    last_message: JSON.stringify(analysis),
+  });
+
+  const result = parseBobOutput(stdout);
+  assert.equal(result.projectSummary, "A demo service.");
+  assert.equal(result.modules?.length, 1);
+  assert.equal(result.recommendedFiles?.length, 1);
+});
+
 test("reports a clear failure for empty or unparsable output", () => {
   assert.throws(() => parseBobOutput("   "), BobProviderError);
   assert.throws(() => parseBobOutput("I could not read the repository."), BobProviderError);
