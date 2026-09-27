@@ -24,10 +24,6 @@ export async function resolveWorkspace(
   repository: RepositoryRef,
   root: string = env.REPOMAP_WORKSPACE_DIR ?? path.join(process.cwd(), WORKSPACE_CACHE_DIR),
 ): Promise<string> {
-  if (env.REPOMAP_WORKSPACE_DIR) {
-    return path.resolve(env.REPOMAP_WORKSPACE_DIR);
-  }
-
   const target = path.join(root, workspaceDirName(repository));
   await mkdir(target, { recursive: true });
 
