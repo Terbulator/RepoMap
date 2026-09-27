@@ -5,7 +5,6 @@ import type {
 } from "@/features/scope-shield/stack-context";
 
 const BLOCK_TITLES = {
-  repository: "Target repository",
   stack: "Primary tech stack",
   auth: "Auth & middleware architecture",
   directories: "Primary directories & entry points",
@@ -91,10 +90,6 @@ export function RepositoryContextView({
       </p>
 
       <div className="mt-5 grid gap-5 sm:grid-cols-2">
-        <Block title={BLOCK_TITLES.repository}>
-          <Pill>Next.js App Router</Pill>
-          <Pill>TypeScript</Pill>
-        </Block>
         <Block title={BLOCK_TITLES.stack}>
           {context.primaryStack.map((item) => (
             <Pill key={item}>{item}</Pill>

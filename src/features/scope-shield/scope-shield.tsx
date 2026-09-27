@@ -140,18 +140,17 @@ export function ScopeShield() {
 
       {hasRepository ? null : <NoRepositoryState />}
 
-      <div className="mt-6">
-        <RepositoryContextView
-          context={result?.context ?? repositoryContext}
-          stack={result?.stack ?? EMPTY_STACK}
-          grounding={
-            grounding ||
-            (hasRepository
-              ? "Grounded in Repo Analysis — no request analysed yet."
-              : NO_REPOSITORY_NOTE)
-          }
-        />
-      </div>
+      {/* Nothing is rendered here until a real Onboarding Map result exists:
+          with no repository the card would only show placeholders. */}
+      {hasRepository ? (
+        <div className="mt-6">
+          <RepositoryContextView
+            context={result?.context ?? repositoryContext}
+            stack={result?.stack ?? EMPTY_STACK}
+            grounding={grounding || "Grounded in Repo Analysis — no request analysed yet."}
+          />
+        </div>
+      ) : null}
 
       <form onSubmit={handleSubmit} noValidate className="mt-8">
         <label htmlFor="feature-request" className="block text-sm font-medium">

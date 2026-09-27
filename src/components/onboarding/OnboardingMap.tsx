@@ -19,162 +19,6 @@ import type { RepoMap } from "@/features/repomap/schema";
 
 const ArchitectureMap3D = lazy(() => import("./ArchitectureMap3D").then((m) => ({ default: m.ArchitectureMap3D })));
 
-const mockAnalysis: RepoMapAnalysis = {
-  projectSummary: "RepoMap is a developer onboarding and code intelligence tool that transforms any GitHub repository into an interactive, living map. It uses IBM Bob 2.0 to analyze the full repository context and generates a visual architecture diagram, plain-English module breakdowns, ranked starter files, and common gotchas — helping new developers become productive in unfamiliar codebases within minutes instead of days.",
-  stack: [
-    "Next.js 16 (App Router)",
-    "React 19",
-    "TypeScript 5",
-    "Tailwind CSS 4",
-    "React Flow (@xyflow/react)",
-    "IBM Bob 2.0 SDK"
-  ],
-  modules: [
-    {
-      id: "repo-ingestion",
-      name: "Repository Ingestion",
-      path: "src/server/bob",
-      purpose: "Handles cloning and ingesting target repositories into Bob 2.0's context. Provides workspace management, file filtering, and session orchestration for Bob's analysis tasks.",
-      files: [
-        "src/server/bob/workspace.ts",
-        "src/server/bob/cli-provider.ts",
-        "src/server/bob/mock-provider.ts",
-        "src/server/bob/provider.ts"
-      ],
-      dependencies: [
-        "IBM Bob 2.0 SDK",
-        "Node.js fs/promises",
-        "simple-git"
-      ]
-    },
-    {
-      id: "repo-analysis",
-      name: "Repository Analysis",
-      path: "src/server/repomap",
-      purpose: "Orchestrates Bob 2.0 to perform full-repository analysis. Generates the structured RepoMap output including project summary, module breakdown, file relationships, and gotchas.",
-      files: [
-        "src/server/repomap/analyze-repository.ts"
-      ],
-      dependencies: [
-        "Repository Ingestion",
-        "IBM Bob 2.0 SDK",
-        "Zod (schema validation)"
-      ]
-    },
-    {
-      id: "onboarding-map",
-      name: "Onboarding Map (Frontend)",
-      path: "src/components/onboarding",
-      purpose: "Renders the interactive onboarding dashboard: architecture graph, module cards, recommended files, gotchas, and module detail drawer. Consumes the RepoMap analysis contract and presents it as a polished developer tool.",
-      files: [
-        "src/components/onboarding/OnboardingMap.tsx",
-        "src/components/onboarding/ArchitectureDiagram.tsx",
-        "src/components/onboarding/ModuleCards.tsx",
-        "src/components/onboarding/RecommendedFiles.tsx",
-        "src/components/onboarding/Gotchas.tsx",
-        "src/components/onboarding/ModuleDetailDrawer.tsx",
-        "src/components/onboarding/ProjectSummary.tsx"
-      ],
-      dependencies: [
-        "React Flow (@xyflow/react)",
-        "lucide-react",
-        "Tailwind CSS",
-        "RepoMap Analysis Types"
-      ]
-    },
-    {
-      id: "scope-shield",
-      name: "ScopeShield (Scope Clarifier)",
-      path: "src/features/scope-shield",
-      purpose: "Accepts free-text feature requests and returns risk analysis, clarifying questions, and a drafted professional reply — all grounded in the repository's actual stack and architecture from the Onboarding Map analysis.",
-      files: [
-        "src/features/scope-shield/scope-shield.tsx",
-        "src/features/scope-shield/risk-analysis.ts",
-        "src/features/scope-shield/clarifying-questions.ts",
-        "src/features/scope-shield/drafted-reply.ts",
-        "src/features/scope-shield/feature-request.ts",
-        "src/features/scope-shield/keyword-match.ts",
-        "src/features/scope-shield/stack-context.ts",
-        "src/features/scope-shield/repository-context.ts"
-      ],
-      dependencies: [
-        "Onboarding Map (for repo context)",
-        "IBM Bob 2.0 SDK",
-        "Zod (schema validation)"
-      ]
-    },
-    {
-      id: "api-routes",
-      name: "API Routes",
-      path: "src/app/api",
-      purpose: "Thin backend layer that exposes Bob 2.0 capabilities via Next.js API routes. Handles repository ingestion, analysis triggering, and ScopeShield requests.",
-      files: [
-        "src/app/api/health/route.ts",
-        "src/app/api/repomap/route.ts",
-        "src/app/api/repository/analyze/route.ts",
-        "src/app/api/onboarding/route.ts"
-      ],
-      dependencies: [
-        "Next.js 16 App Router",
-        "Repository Ingestion",
-        "Repository Analysis",
-        "ScopeShield"
-      ]
-    },
-    {
-      id: "shared-types",
-      name: "Shared Types & Schemas",
-      path: "src/types / src/features/repomap",
-      purpose: "Defines the canonical RepoMap analysis contract (projectSummary, stack, modules, recommendedFiles, gotchas, relationships) and Zod schemas for validation. Shared between backend (Bob output parsing) and frontend (UI consumption).",
-      files: [
-        "src/types/onboarding.ts",
-        "src/features/repomap/schema.ts",
-        "src/features/repomap/normalize.ts",
-        "src/features/repomap/request.ts"
-      ],
-      dependencies: [
-        "Zod",
-        "TypeScript"
-      ]
-    }
-  ],
-  recommendedFiles: [
-    {
-      path: "src/components/onboarding/OnboardingMap.tsx",
-      reason: "Main entry point for the Onboarding Map dashboard. Composes all sections (architecture graph, module breakdown, recommended files, gotchas) and manages module selection state.",
-      rank: 1
-    },
-    {
-      path: "src/components/onboarding/ArchitectureDiagram.tsx",
-      reason: "Core visualization component using React Flow. Renders modules as nodes and relationships as edges with zoom/pan/fit controls. Click handlers drive the module detail drawer.",
-      rank: 2
-    },
-    {
-      path: "src/server/repomap/analyze-repository.ts",
-      reason: "Orchestrates Bob 2.0 to produce the full RepoMap analysis. Understanding this shows how the analysis contract is generated from raw repository content.",
-      rank: 3
-    }
-  ],
-  gotchas: [
-    "The architecture graph derives nodes from modules[] and edges from relationships[] — both must be present and consistent for the diagram to render correctly.",
-    "Module IDs in relationships must exactly match module IDs in modules[] array, otherwise edges will not connect to visible nodes.",
-    "Bob 2.0 analysis output is non-deterministic; the normalize.ts pipeline validates and coerces output into the strict RepoMap contract before the UI consumes it.",
-    "React Flow requires explicit width/height on its container; the ArchitectureDiagram uses a resize observer to fill its parent card responsively.",
-    "The mock analysis fixture (src/data/mock-analysis.json) is used for development and demo; production data comes from the /api/onboarding endpoint after Bob completes analysis.",
-    "ScopeShield depends on the Onboarding Map's analysis output — if no repository has been analyzed, ScopeShield falls back to generic stack-agnostic responses."
-  ],
-  relationships: [
-    { source: "repo-ingestion", target: "repo-analysis", type: "provides-context" },
-    { source: "repo-analysis", target: "shared-types", type: "produces-contract" },
-    { source: "shared-types", target: "onboarding-map", type: "consumes-contract" },
-    { source: "shared-types", target: "scope-shield", type: "consumes-contract" },
-    { source: "onboarding-map", target: "api-routes", type: "fetches-from" },
-    { source: "scope-shield", target: "api-routes", type: "fetches-from" },
-    { source: "api-routes", target: "repo-ingestion", type: "calls" },
-    { source: "api-routes", target: "repo-analysis", type: "calls" }
-  ]
-};
-
 type State =
   | { phase: "idle" }
   | { phase: "loading" }
@@ -314,11 +158,6 @@ export function OnboardingMap() {
               )}
             </div>
           )}
-          {state.phase !== "success" && (
-            <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary-500/20 border border-primary-500/30 text-primary-400">
-              Mock Analysis
-            </span>
-          )}
         </div>
       </header>
 
@@ -360,6 +199,10 @@ export function OnboardingMap() {
               Only public GitHub repositories are supported. Analysis may take up to 15 minutes when
               IBM Bob 2.0 is active.
             </p>
+
+            <p className="mt-6 rounded-lg border border-dashed border-neutral-800 bg-neutral-900/40 px-4 py-3 text-sm text-neutral-500">
+              No repository analyzed yet. Enter a GitHub repository to generate the architecture map.
+            </p>
           </section>
         )}
 
@@ -397,75 +240,76 @@ export function OnboardingMap() {
           </section>
         )}
 
-        {/* Success state — render the full dashboard */}
-        {(state.phase === "success" || state.phase === "idle") && (
+        {/* Success state — render the dashboard from the real analysis only.
+            The idle state must never render placeholder data. */}
+        {state.phase === "success" && (
           <>
-{state.phase === "success" && (
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs text-neutral-500">{state.repoUrl}</span>
-                  {state.analysis.provenance && (
-                    <span
-                      className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                        state.analysis.provenance.provider === "mock"
-                          ? "bg-amber-500/20 border border-amber-500/30 text-amber-400"
-                          : "bg-green-500/20 border border-green-500/30 text-green-400"
-                      }`}
-                    >
-                      {state.analysis.provenance.provider === "mock"
-                        ? "Mock (Demo)"
-                        : "IBM Bob 2.0"}
-                      </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="text-xs text-neutral-500 underline underline-offset-2 hover:text-primary-400 transition-colors"
-                >
-                  ← Analyze another repository
-                </button>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-xs text-neutral-500">{state.repoUrl}</span>
+                {state.analysis.provenance && (
+                  <span
+                    className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                      state.analysis.provenance.provider === "mock"
+                        ? "bg-amber-500/20 border border-amber-500/30 text-amber-400"
+                        : "bg-green-500/20 border border-green-500/30 text-green-400"
+                    }`}
+                  >
+                    {state.analysis.provenance.provider === "mock"
+                      ? "Mock (Demo)"
+                      : "IBM Bob 2.0"}
+                  </span>
+                )}
               </div>
-            )}
+              <button
+                type="button"
+                onClick={handleReset}
+                className="text-xs text-neutral-500 underline underline-offset-2 hover:text-primary-400 transition-colors"
+              >
+                ← Analyze another repository
+              </button>
+            </div>
 
-            <ProjectSummary analysis={state.phase === "success" ? state.analysis : mockAnalysis} />
+            <ProjectSummary analysis={state.analysis} />
 
             <Suspense fallback={
               <ReactFlowProvider>
                 <ArchitectureDiagram
-                  analysis={state.phase === "success" ? state.analysis : mockAnalysis}
+                  analysis={state.analysis}
                   selectedModuleId={selectedModuleId}
                   onModuleSelect={selectWithDetails}
                 />
               </ReactFlowProvider>
             }>
               <ArchitectureMap3D
-                modules={state.phase === "success" ? state.analysis.modules : mockAnalysis.modules}
-                relationships={state.phase === "success" ? state.analysis.relationships : mockAnalysis.relationships}
+                modules={state.analysis.modules}
+                relationships={state.analysis.relationships}
                 selectedModuleId={selectedModuleId}
                 onModuleSelect={setSelectedModuleId}
                 onModuleDetails={openDetails}
               />
             </Suspense>
 
-            <RecommendedFiles analysis={state.phase === "success" ? state.analysis : mockAnalysis} />
+            <RecommendedFiles analysis={state.analysis} />
 
             <ModuleCards
-              analysis={state.phase === "success" ? state.analysis : mockAnalysis}
+              analysis={state.analysis}
               selectedModuleId={selectedModuleId}
               onModuleSelect={selectWithDetails}
             />
 
-            <Gotchas analysis={state.phase === "success" ? state.analysis : mockAnalysis} />
+            <Gotchas analysis={state.analysis} />
           </>
         )}
       </main>
 
-      <ModuleDetailDrawer
-        analysis={state.phase === "success" ? state.analysis : mockAnalysis}
-        selectedModuleId={detailModuleId}
-        onClose={() => setDetailModuleId(null)}
-      />
+      {state.phase === "success" && (
+        <ModuleDetailDrawer
+          analysis={state.analysis}
+          selectedModuleId={detailModuleId}
+          onClose={() => setDetailModuleId(null)}
+        />
+      )}
     </div>
   );
 }
