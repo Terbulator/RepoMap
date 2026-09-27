@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import type { RepoMap, RepoMapModule } from "@/features/repomap/schema";
 import { analyzeRepositoryClient } from "./api-client";
 import { RepoDiagram } from "./diagram";
+import { saveRepoMap } from "@/features/repomap/store";
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -276,6 +277,9 @@ export function OnboardingMap() {
 
     const result = await analyzeRepositoryClient(trimmed);
     if (result.ok) {
+      // Hand the real analysis to ScopeShield: it is the only repository
+      // context ScopeShield is allowed to reason about.
+      saveRepoMap(result.analysis);
       setState({ phase: "success", analysis: result.analysis });
     } else {
       setState({ phase: "error", code: result.code, message: result.message });

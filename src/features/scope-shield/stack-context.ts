@@ -2,14 +2,12 @@
  * Stack context for the drafted reply (PRD FR-7: ground the reply in the
  * repository's actual stack).
  *
- * Detection starts from the real RepoMap analysis when one has been stored in
- * localStorage (written by the Onboarding Map after a successful analysis call),
- * and falls back to the static BASE_STACK when no analysis is available. The
- * `detectStackContext` augmentation layer adds technologies implied by the
- * feature request text on top of whichever base is used.
+ * `StackContext` and the mock `detectStackContext` remain for the mock provider
+ * and its tests. A real run's stack comes from IBM Bob instead (see
+ * provider-schema.ts), so nothing in the production path calls this.
  */
 
-import type { RepoMap } from "@/features/repomap/schema";
+import type { RepoMap } from "../repomap/schema.ts";
 import { matchesAny } from "./keyword-match.ts";
 
 export type StackContext = {
@@ -285,6 +283,67 @@ export function getRepositoryContext(): RepositoryContext {
   const stored = readStoredRepoMap();
   if (stored) return repositoryContextFromRepoMap(stored);
   return FALLBACK_REPOSITORY_CONTEXT;
+}
+
+/**
+ * The real repository context, built from a real Onboarding Map result.
+ *
+ * Every field comes from the RepoMap. The one judgement call is
+ * `authArchitecture`: the repo map has no auth field, so modules whose path or
+ * purpose actually mentions auth are listed, and an empty repository says so
+ * rather than claiming an auth layer that was never found.
+ */
+export function toRepositoryContext(repoMap: RepoMap | null): RepositoryContext {
+  if (!repoMap) {
+    return {
+      repositoryName: "No repository analysed yet",
+      primaryStack: [],
+      authArchitecture: ["No repository analysed yet"],
+      directories: [],
+      provenance: {
+        source: "No repository analysed yet",
+        analyzedAt: new Date(0).toISOString(),
+        moduleCount: 0,
+        note: NO_REPOSITORY_NOTE,
+      },
+    };
+  }
+
+  const isMock = repoMap.provenance.provider === "mock";
+  const authModules = repoMap.modules.filter((module) =>
+    /auth|security|session|login|permission|role|access/i.test(
+      `${module.path} ${module.name} ${module.purpose}`,
+    ),
+  );
+
+  return {
+    repositoryName: `${repoMap.repository.name} (${repoMap.repository.slug})`,
+    primaryStack: repoMap.stack,
+    authArchitecture:
+      authModules.length > 0
+        ? authModules.map((module) => `${module.name} — ${module.path}`)
+        : ["No auth or session module identified in the repo map"],
+    directories: dedupe(repoMap.modules.map((module) => module.path)),
+    provenance: {
+      source: isMock
+        ? "Repo map analysis (mock)"
+        : `Repo map analysis by ${repoMap.provenance.provider}`,
+      analyzedAt: repoMap.provenance.generatedAt,
+      moduleCount: repoMap.modules.length,
+      note: isMock
+        ? (repoMap.provenance.notice ??
+          "Mock data for local development. IBM Bob 2.0 was not called.")
+        : `From the Onboarding Map analysis of ${repoMap.repository.url}, run by ${repoMap.provenance.provider} in ${repoMap.provenance.durationMs}ms.`,
+    },
+  };
+}
+
+/** Shown instead of pretending a repository exists. */
+export const NO_REPOSITORY_NOTE =
+  "No repository has been analysed yet. Run the Onboarding Map first — ScopeShield reasons about a real codebase, not an assumed one.";
+
+function dedupe(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 /**

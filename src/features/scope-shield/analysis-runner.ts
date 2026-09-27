@@ -1,54 +1,36 @@
 /**
- * Stage 6 of ScopeShield: the Idle -> Loading -> Success | Error run.
+ * ScopeShield's run lifecycle: Idle -> Loading -> Success | Error.
  *
- * This module is the seam where the mock pipeline becomes a real one. It
- * validates the request, attempts a live IBM Bob 2.0 scope analysis call, and
- * — on any failure — gracefully falls back to the deterministic mock generators
- * so the UI never locks up.
+ * The mock pipeline that used to live here is gone. This module now validates
+ * the request, hands the *real* Onboarding Map context to the server, and
+ * returns the already-validated result. IBM Bob 2.0 is only ever called from
+ * `POST /api/scope-shield`; the browser never touches the CLI, the API key or a
+ * workspace.
  *
- * Failure is deterministic, not random: a request that mentions a failure word
- * ("error", "timeout", …) always fails in the mock path, so the error state can
- * be demonstrated on demand. The Bob 2.0 live path never consults the mock
- * failure keywords — that check is mock-only.
+ * `runScopeAnalysis` never rejects. A provider or network failure comes back as
+ * `{ status: "error" }` so the UI always has an error state to show, and it is
+ * never quietly replaced with mock data.
  */
 
 import {
   EMPTY_REQUEST_MESSAGE,
   normalizeFeatureRequest,
 } from "./feature-request.ts";
-import { generateClarifyingQuestions } from "./clarifying-questions.ts";
+import { readStoredRepoMap } from "../repomap/store.ts";
+import type { RepoMap } from "../repomap/schema.ts";
 import type { ClarifyingQuestion } from "./clarifying-questions.ts";
-import { buildDraftedReply } from "./drafted-reply.ts";
-import { analyzeFeatureRequest } from "./risk-analysis.ts";
 import type { RiskAnalysis } from "./risk-analysis.ts";
-import {
-  detectStackContext,
-  formatGroundingNote,
-  getRepositoryContext,
-  stackContextFromPrimaryStack,
-} from "./stack-context.ts";
 import type { RepositoryContext, StackContext } from "./stack-context.ts";
-import { findSignal } from "./keyword-match.ts";
 
 /** Below this, the request cannot produce a useful scope analysis. */
 export const MIN_REQUEST_LENGTH = 10;
 
 export const INVALID_REQUEST_MESSAGE = "Please enter a valid feature request.";
 export const ANALYSIS_ERROR_MESSAGE = "Failed to analyze scope. Please try again.";
-
-/** Mock latency, so the loading state is visible in a demo. */
-export const MOCK_LATENCY_MS = 900;
-
-/** Requests containing one of these always fail in the mock path, to exercise the error state. */
-export const MOCK_FAILURE_KEYWORDS = [
-  "error",
-  "timeout",
-  "crash",
-  "unavailable",
-  "failed",
-  "fails",
-  "failure",
-];
+export const NO_REPOSITORY_MESSAGE =
+  "Analyze a repository first. ScopeShield reasons about a real codebase, so it needs an Onboarding Map result.";
+export const NETWORK_ERROR_MESSAGE =
+  "Could not reach the ScopeShield API. Check your connection and try again.";
 
 /** API route the client calls to reach IBM Bob 2.0 (server-side, credentials protected). */
 export const BOB_SCOPE_API_PATH = "/api/scope/analyze";
@@ -63,7 +45,12 @@ export type ScopeAnalysisResult = {
   stack: StackContext;
   grounding: string;
   draft: string;
-  source: "bob-2.0" | "mock";
+  /** The real repository context the server grounded this run in. */
+  context: RepositoryContext;
+  /** Which provider produced this, so the UI never claims Bob ran when it did not. */
+  provider: "bob-2.0" | "mock";
+  /** The Bob task id, when the provider exposed one (PRD §7 traceability). */
+  bobTaskId: string | null;
 };
 
 export type ScopeAnalysisOutcome =
@@ -73,6 +60,12 @@ export type ScopeAnalysisOutcome =
 export type RequestValidation =
   | { ok: true; request: string }
   | { ok: false; message: string };
+
+/** Seam for tests: the real implementation is the browser `fetch`. */
+export type ScopeShieldDeps = {
+  fetchImpl?: typeof fetch;
+  repoMap?: RepoMap | null;
+};
 
 /** Trims the input, then rejects what cannot produce a useful analysis. */
 export function validateFeatureRequest(input: string): RequestValidation {
@@ -88,188 +81,92 @@ export function validateFeatureRequest(input: string): RequestValidation {
   return { ok: true, request };
 }
 
-export function shouldMockProviderFail(request: string): boolean {
-  return findSignal(MOCK_FAILURE_KEYWORDS, request) !== "";
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
- * Runs the whole mock pipeline. Resolves with a success result, or with the
- * error message the UI should show. Never rejects.
+ * Runs the real analysis on the server and returns the outcome the UI renders.
+ * Resolves with a success result, or with the error message to show. Never
+ * rejects, and never falls back to invented data.
  */
 async function runMockAnalysis(
   request: string,
-  context: RepositoryContext,
-  stack: StackContext,
-  latencyMs: number,
+  deps: ScopeShieldDeps = {},
 ): Promise<ScopeAnalysisOutcome> {
-  const analysis = analyzeFeatureRequest(request);
-  const questions = generateClarifyingQuestions(request);
-  const grounding = formatGroundingNote(context, stack);
-  const draft = buildDraftedReply({ request, stack, analysis, questions, grounding });
+  const doFetch = deps.fetchImpl ?? fetch;
+  const repoMap = deps.repoMap === undefined ? readStoredRepoMap() : deps.repoMap;
 
-  await delay(latencyMs);
-
-  if (shouldMockProviderFail(request)) {
-    return { status: "error", message: ANALYSIS_ERROR_MESSAGE, fellBackToMock: false };
+  if (!repoMap) {
+    return { status: "error", message: NO_REPOSITORY_MESSAGE };
   }
-
-  return {
-    status: "success",
-    result: { request, analysis, questions, stack, grounding, draft, source: "mock" },
-  };
-}
-
-/** Shape of a successful /api/scope/analyze response. */
-type ScopeApiSuccess = {
-  success: true;
-  result: {
-    request: string;
-    analysis: RiskAnalysis;
-    questions: ClarifyingQuestion[];
-    stack: StackContext;
-    trace?: { taskId: string | null; model: string | null };
-  };
-};
-
-type ScopeApiFailure = {
-  success: false;
-  error: { code: string; message: string };
-};
-
-/**
- * Calls the server-side /api/scope/analyze route, which in turn calls IBM Bob
- * 2.0. Aborts after `timeoutMs`. Throws on any failure so the caller can fall
- * back to mocks.
- */
-async function fetchBobScopeAnalysis(
-  request: string,
-  context: RepositoryContext,
-  stack: StackContext,
-  timeoutMs: number,
-): Promise<{
-  request: string;
-  analysis: RiskAnalysis;
-  questions: ClarifyingQuestion[];
-  stack: StackContext;
-}> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   let response: Response;
   try {
-    response = await fetch(BOB_SCOPE_API_PATH, {
+    response = await doFetch("/api/scope-shield", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         request,
-        repositoryContext: context,
-        stackContext: stack,
+        repository: repoMap.repository.url,
+        repoMap,
       }),
-      signal: controller.signal,
     });
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(
-        `IBM Bob 2.0 scope analysis timed out after ${timeoutMs}ms.`,
-      );
-    }
-    throw new Error("Could not reach the IBM Bob 2.0 scope analysis service.");
-  } finally {
-    clearTimeout(timer);
+  } catch {
+    return { status: "error", message: NETWORK_ERROR_MESSAGE };
   }
 
-  if (!response.ok) {
-    const errorData = (await response.json().catch(() => ({}))) as ScopeApiFailure;
-    throw new Error(
-      errorData.error?.message ||
-        `IBM Bob 2.0 API returned HTTP ${response.status}.`,
-    );
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return { status: "error", message: ANALYSIS_ERROR_MESSAGE };
   }
 
-  const data = (await response.json()) as ScopeApiSuccess | ScopeApiFailure;
-  if (!data.success || !data.result) {
-    const failure = data as ScopeApiFailure;
-    throw new Error(failure.error?.message || "IBM Bob 2.0 API returned an unexpected response.");
+  if (typeof body !== "object" || body === null) {
+    return { status: "error", message: ANALYSIS_ERROR_MESSAGE };
   }
 
-  return {
-    request: data.result.request,
-    analysis: data.result.analysis,
-    questions: data.result.questions,
-    stack: data.result.stack,
-  };
+  const envelope = body as Record<string, unknown>;
+
+  if (envelope.success === true && isScopeAnalysisResult(envelope.result)) {
+    return { status: "success", result: envelope.result };
+  }
+
+  if (envelope.success === false && typeof envelope.error === "object" && envelope.error !== null) {
+    const error = envelope.error as Record<string, unknown>;
+    return {
+      status: "error",
+      message:
+        typeof error.message === "string" && error.message !== ""
+          ? error.message
+          : ANALYSIS_ERROR_MESSAGE,
+    };
+  }
+
+  return { status: "error", message: ANALYSIS_ERROR_MESSAGE };
 }
 
 /**
- * Runs the full scope analysis lifecycle (Stage 6).
- *
- * Attempts a live IBM Bob 2.0 API call first (via /api/scope/analyze). If that
- * fails for any reason — no endpoint configured, auth failure, timeout, non-200,
- * or invalid response — logs a clear console warning and falls back to the
- * deterministic mock generators so the UI always reaches Success or Error.
- *
- * Never rejects: every code path resolves with a `ScopeAnalysisOutcome`.
+ * A minimal shape check, so a 200 carrying garbage surfaces as an error instead
+ * of crashing a view. The server is the real validation boundary; this only
+ * confirms the fields the UI reads are actually there.
  */
-export async function runScopeAnalysis(
-  request: string,
-  latencyMs: number = MOCK_LATENCY_MS,
-  bobTimeoutMs: number = DEFAULT_BOB_TIMEOUT_MS,
-): Promise<ScopeAnalysisOutcome> {
-  const context = getRepositoryContext();
-  const repoBase =
-    context.primaryStack.length > 0
-      ? stackContextFromPrimaryStack(context.primaryStack)
-      : undefined;
-  const stack = detectStackContext(request, repoBase);
+function isScopeAnalysisResult(value: unknown): value is ScopeAnalysisResult {
+  if (typeof value !== "object" || value === null) return false;
 
-  const hasFetch = typeof fetch === "function";
+  const result = value as Record<string, unknown>;
+  const analysis = result.analysis;
+  const context = result.context;
 
-  if (hasFetch) {
-    try {
-      const bobResult = await fetchBobScopeAnalysis(request, context, stack, bobTimeoutMs);
-      const stackUsed = bobResult.stack ?? stack;
-      const grounding = formatGroundingNote(context, stackUsed);
-      const draft = buildDraftedReply({
-        request: bobResult.request,
-        stack: stackUsed,
-        analysis: bobResult.analysis,
-        questions: bobResult.questions,
-        grounding,
-      });
-
-      return {
-        status: "success",
-        result: {
-          request,
-          analysis: bobResult.analysis,
-          questions: bobResult.questions,
-          stack: stackUsed,
-          grounding,
-          draft,
-          source: "bob-2.0",
-        },
-      };
-    } catch (error) {
-      console.warn(
-        "[ScopeShield] IBM Bob 2.0 scope analysis unavailable — falling back to deterministic mock generators:",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-  } else {
-    console.warn(
-      "[ScopeShield] fetch is not available in this environment; using deterministic mock generators.",
-    );
-  }
-
-  // Fallback to mock generators. Any error coming from this path means Bob 2.0
-  // was unavailable (or returned an error), so the mock path is always a fallback.
-  const mockOutcome = await runMockAnalysis(request, context, stack, latencyMs);
-  if (mockOutcome.status === "error") {
-    return { status: "error", message: mockOutcome.message, fellBackToMock: true };
-  }
-  return mockOutcome;
+  return (
+    typeof result.request === "string" &&
+    typeof result.grounding === "string" &&
+    typeof result.draft === "string" &&
+    typeof result.provider === "string" &&
+    typeof analysis === "object" &&
+    analysis !== null &&
+    Array.isArray((analysis as Record<string, unknown>).domains) &&
+    Array.isArray(result.questions) &&
+    Array.isArray((result.stack as Record<string, unknown> | undefined)?.languages) &&
+    typeof context === "object" &&
+    context !== null &&
+    Array.isArray((context as Record<string, unknown>).primaryStack)
+  );
 }

@@ -1,6 +1,7 @@
 import { providerAnalysisSchema } from "../../features/repomap/schema.ts";
+import { scopeProviderAnalysisSchema } from "../../features/scope-shield/provider-schema.ts";
 import { extractJsonPayload, readString } from "./json.ts";
-import { BobProviderError, type BobTaskTrace, type RepositoryAnalysis } from "./provider.ts";
+import { BobProviderError, type BobTaskTrace, type RepositoryAnalysis, type ScopeAnalysis } from "./provider.ts";
 
 /**
  * Reads the `--format json` output of `bob run`.
@@ -12,12 +13,56 @@ import { BobProviderError, type BobTaskTrace, type RepositoryAnalysis } from "./
  * CLI; anything unreadable is a provider failure rather than a guess.
  */
 export function parseBobOutput(stdout: string, binary = "bob"): RepositoryAnalysis {
+  const { payload, trace } = readBobEnvelope(stdout, binary);
+
+  return {
+    ...providerAnalysisSchema.parse(payload),
+    trace,
+  };
+}
+
+/**
+ * ScopeShield's parser (PRD 5.2). Same envelope handling as `parseBobOutput`,
+ * but the payload is validated against the strict ScopeShield contract: a
+ * partial or invented answer is a provider failure, never a partial result.
+ */
+export function parseScopeOutput(stdout: string, binary = "bob"): ScopeAnalysis {
+  const { payload, trace } = readBobEnvelope(stdout, binary);
+
+  const parsed = scopeProviderAnalysisSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new BobProviderError(
+      `${binary} returned scope analysis JSON that does not match the ScopeShield contract: ${formatIssues(parsed.error)}`,
+    );
+  }
+
+  return { scope: parsed.data, trace };
+}
+
+/**
+ * Unwraps the `--format json` envelope once, for every operation, so the task id
+ * is never lost to the unwrapping and the two parsers cannot drift apart.
+ */
+function readBobEnvelope(stdout: string, binary: string): { payload: unknown; trace: BobTaskTrace } {
   const trimmed = stdout.trim();
   if (trimmed === "") {
     throw new BobProviderError(`${binary} returned no output.`);
   }
 
   const envelope = firstJsonObject(trimmed);
+
+  // Detect the max-turns scenario: Bob emits a `{"type":"error",...}` line before
+  // the result envelope, and the result's `last_message` is then whatever Bob said
+  // on its final turn — prose, not the finished JSON. Without this, the failure
+  // would surface as a baffling schema mismatch instead of the actual cause.
+  if (trimmed.includes("The task reached the maximum of")) {
+    const match = trimmed.match(/"The task reached the maximum of[^"]+"/);
+    throw new BobProviderError(
+      `${binary} did not finish the analysis: ${match ? match[0] : "it ran out of turns"}. ` +
+        "Increase BOB_MAX_TURNS or narrow the request.",
+    );
+  }
+
   const payload = extractJsonPayload(envelope ?? trimmed);
 
   if (payload == null || typeof payload !== "object") {
@@ -30,19 +75,26 @@ export function parseBobOutput(stdout: string, binary = "bob"): RepositoryAnalys
   // The task id lives on the envelope, which extractJsonPayload unwraps away.
   const envelopeStats = (envelope as Record<string, unknown> | null)?.stats;
   const stats = (envelopeStats ?? record.stats) as Record<string, unknown> | undefined;
-  const trace: BobTaskTrace = {
-    taskId:
-      readString(record.taskId) ??
-      readString(record.id) ??
-      readString(record.sessionId) ??
-      readString(stats?.task_id),
-    model: readString(record.model),
-  };
 
   return {
-    ...providerAnalysisSchema.parse(payload),
-    trace,
+    payload,
+    trace: {
+      taskId:
+        readString(record.taskId) ??
+        readString(record.id) ??
+        readString(record.sessionId) ??
+        readString(stats?.task_id),
+      model: readString(record.model),
+    },
   };
+}
+
+/** Zod issues as one short line, so the UI never shows a raw stack trace. */
+function formatIssues(error: { issues: Array<{ path: PropertyKey[]; message: string }> }): string {
+  return error.issues
+    .slice(0, 3)
+    .map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`)
+    .join("; ");
 }
 
 /** `--format json` is either one JSON document or a stream of them. */
