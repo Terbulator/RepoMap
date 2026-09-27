@@ -64,6 +64,7 @@ export function createCliBobProvider(
 
     return runBob(
       buildCommand(binary, [
+        "--accept-license",
         "run",
         "--format",
         "json",
