@@ -24,11 +24,15 @@ export type ProviderReadiness = {
   reason: string | null;
   binary: string;
   apiKeyPresent: boolean;
+  /** Length only, so a rotated key can be confirmed without exposing it. */
+  apiKeyLength: number;
 };
 
 export function describeProviderReadiness(): ProviderReadiness {
   const binary = env.BOB_CLI_PATH;
-  const apiKeyPresent = Boolean(process.env.BOB_API_KEY);
+  const apiKey = env.BOB_API_KEY;
+  const apiKeyPresent = Boolean(apiKey);
+  const apiKeyLength = apiKey?.length ?? 0;
 
   if (env.REPOMAP_PROVIDER !== "bob-2.0") {
     return {
@@ -37,6 +41,7 @@ export function describeProviderReadiness(): ProviderReadiness {
       reason: null,
       binary,
       apiKeyPresent,
+      apiKeyLength,
     };
   }
 
@@ -44,7 +49,7 @@ export function describeProviderReadiness(): ProviderReadiness {
     ? "BOB_API_KEY is not set, so headless IBM Bob 2.0 runs will fail."
     : null;
 
-  return { provider: "bob-2.0", ready: reason === null, reason, binary, apiKeyPresent };
+  return { provider: "bob-2.0", ready: reason === null, reason, binary, apiKeyPresent, apiKeyLength };
 }
 
 /**
@@ -67,6 +72,7 @@ export async function getBobProviderFor(
       reason: readiness.reason,
       binary: readiness.binary,
       apiKeyPresent: readiness.apiKeyPresent,
+      apiKeyLength: readiness.apiKeyLength,
     });
   }
 

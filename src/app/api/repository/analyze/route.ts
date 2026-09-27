@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { InvalidAnalysisError } from "@/features/repomap/normalize.ts";
 import { repoMapRequestSchema } from "@/features/repomap/request.ts";
 import type { AnalyzeErrorResponse } from "@/features/repomap/schema.ts";
+import { EnvConfigError } from "@/lib/env";
 import { InvalidRepositoryError, parseRepositoryRef } from "@/lib/repository-url.ts";
 import { BobProviderError } from "@/server/bob";
 import { analyzeRepository } from "@/server/repomap/analyze-repository.ts";
@@ -43,6 +44,9 @@ export async function POST(request: Request) {
     const analysis = await analyzeRepository(repository);
     return NextResponse.json({ success: true as const, analysis });
   } catch (error) {
+    if (error instanceof EnvConfigError) {
+      return failure("PROVIDER_UNAVAILABLE", error.message);
+    }
     if (error instanceof InvalidRepositoryError) {
       return failure("INVALID_REPOSITORY", error.message);
     }

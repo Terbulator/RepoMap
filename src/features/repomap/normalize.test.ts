@@ -150,8 +150,8 @@ test("the checked-in mock fixture satisfies the shared contract", () => {
   );
 
   assert.equal(repoMapSchema.safeParse(repoMap).success, true);
-  assert.equal(repoMap.modules.length, 4);
+  assert.equal(repoMap.modules.length, mockAnalysis.modules.length);
   assert.equal(repoMap.recommendedFiles.length, 3);
   assert.ok(repoMap.relationships.length > 0);
-  assert.ok(repoMap.projectSummary.startsWith("Mock fixture"));
+  assert.equal(repoMap.projectSummary, mockAnalysis.projectSummary);
 });

@@ -17,6 +17,7 @@ import { RepositoryContextView } from "@/features/scope-shield/repository-contex
 import { NO_REPOSITORY_NOTE, toRepositoryContext } from "@/features/scope-shield/stack-context";
 import type { StackContext } from "@/features/scope-shield/stack-context";
 import {
+  getServerRepoMapSnapshot,
   getStoredRepoMapSnapshot,
   subscribeToStoredRepoMap,
 } from "@/features/repomap/store";
@@ -50,20 +51,19 @@ export function ScopeShield() {
   const [lastRequest, setLastRequest] = useState("");
   const [result, setResult] = useState<ScopeAnalysisResult | null>(null);
   // localStorage cannot be read while server-rendering, so the repository is
-  // subscribed to as an external store: the server snapshot is null and the
-  // real map appears on the first client render, with no hydration mismatch.
+  // subscribed to as an external store. The server snapshot is always null, which
+  // is what keeps the first render identical on both sides; React switches to the
+  // localStorage snapshot after mount, so the real map appears once hydrated.
   const repoMap = useSyncExternalStore(
     subscribeToStoredRepoMap,
     getStoredRepoMapSnapshot,
-    getStoredRepoMapSnapshot,
+    getServerRepoMapSnapshot,
   );
   const runId = useRef(0);
 
   // The real Onboarding Map result is the only repository context used here.
   const repositoryContext = useMemo(() => toRepositoryContext(repoMap), [repoMap]);
   const hasRepository = repoMap !== null;
-
-  const [fellBackToMock, setFellBackToMock] = useState(false);
 
   const isLoading = viewState === "loading";
   const isEmpty = text.trim().length === 0;
@@ -88,12 +88,10 @@ export function ScopeShield() {
 
     if (outcome.status === "error") {
       setErrorMessage(outcome.message || ANALYSIS_ERROR_MESSAGE);
-      setFellBackToMock(outcome.fellBackToMock);
       setViewState("error");
       return;
     }
 
-    setFellBackToMock(false);
     setResult(outcome.result);
     setViewState("success");
   }
@@ -212,17 +210,10 @@ export function ScopeShield() {
           <p className="font-semibold text-rose-800 dark:text-rose-200">
             {errorMessage}
           </p>
-          {fellBackToMock ? (
-            <p className="mt-1 text-xs text-rose-700/90 dark:text-rose-300/90">
-              Live IBM Bob 2.0 was unavailable; the deterministic mock analysis
-              was used as a fallback and also returned an error for this request.
-            </p>
-          ) : (
-            <p className="mt-1 text-rose-700/90 dark:text-rose-300/90">
-              The request is still saved. Retry, or edit the request to clear this
-              message.
-            </p>
-          )}
+          <p className="mt-1 text-rose-700/90 dark:text-rose-300/90">
+            The request is still saved. Retry, or edit the request to clear this
+            message.
+          </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -274,7 +265,7 @@ export function ScopeShield() {
             grounding={result.grounding}
           />
 
-          <DraftedReplyView key={result.draft} draft={result.draft} source={result.source} />
+          <DraftedReplyView key={result.draft} draft={result.draft} source={result.provider} />
         </>
       ) : null}
     </section>

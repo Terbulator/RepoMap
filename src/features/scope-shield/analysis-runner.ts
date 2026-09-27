@@ -32,8 +32,8 @@ export const NO_REPOSITORY_MESSAGE =
 export const NETWORK_ERROR_MESSAGE =
   "Could not reach the ScopeShield API. Check your connection and try again.";
 
-/** API route the client calls to reach IBM Bob 2.0 (server-side, credentials protected). */
-export const BOB_SCOPE_API_PATH = "/api/scope/analyze";
+/** The only route the client calls; IBM Bob 2.0 itself is reached server-side. */
+const SCOPE_SHIELD_API_PATH = "/api/scope-shield";
 
 /** Default timeout for the Bob 2.0 scope API round-trip (FR-7: 15s). */
 export const DEFAULT_BOB_TIMEOUT_MS = 15_000;
@@ -55,7 +55,7 @@ export type ScopeAnalysisResult = {
 
 export type ScopeAnalysisOutcome =
   | { status: "success"; result: ScopeAnalysisResult }
-  | { status: "error"; message: string; fellBackToMock: boolean };
+  | { status: "error"; message: string };
 
 export type RequestValidation =
   | { ok: true; request: string }
@@ -86,7 +86,7 @@ export function validateFeatureRequest(input: string): RequestValidation {
  * Resolves with a success result, or with the error message to show. Never
  * rejects, and never falls back to invented data.
  */
-async function runMockAnalysis(
+export async function runScopeAnalysis(
   request: string,
   deps: ScopeShieldDeps = {},
 ): Promise<ScopeAnalysisOutcome> {
@@ -99,7 +99,7 @@ async function runMockAnalysis(
 
   let response: Response;
   try {
-    response = await doFetch("/api/scope-shield", {
+    response = await doFetch(SCOPE_SHIELD_API_PATH, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({

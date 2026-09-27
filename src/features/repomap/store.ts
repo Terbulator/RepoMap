@@ -67,6 +67,24 @@ export function getStoredRepoMapSnapshot(): RepoMap | null {
   return cachedMap;
 }
 
+/**
+ * The server snapshot for `useSyncExternalStore`.
+ *
+ * This MUST NOT read localStorage. React calls the server snapshot both while
+ * rendering on the server and for the first client render during hydration, so
+ * whatever it returns has to be identical on both sides. Returning null says
+ * "no repository yet" on the server, which is true — the browser's localStorage
+ * is not visible there. After hydration React switches to
+ * `getStoredRepoMapSnapshot`, so the real map appears as soon as it is mounted.
+ *
+ * Passing the localStorage reader here instead is what produces a hydration
+ * mismatch: the server renders the "no repository analysed yet" state while the
+ * client hydrates with the stored map already present.
+ */
+export function getServerRepoMapSnapshot(): RepoMap | null {
+  return null;
+}
+
 /** Re-reads when another tab replaces the stored map. */
 export function subscribeToStoredRepoMap(onStoreChange: () => void): () => void {
   if (!canUseLocalStorage()) return () => {};

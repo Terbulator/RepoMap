@@ -15,6 +15,9 @@ const KEYS = [
   "BOB_TIMEOUT_MS",
   "REPOMAP_WORKSPACE_DIR",
   "REPOMAP_CLONE_TIMEOUT_MS",
+  "BOB_API_KEY",
+  "BOB_ENDPOINT",
+  "BOB_SCOPE_TIMEOUT_MS",
 ] as const;
 
 type SavedEnv = Partial<Record<(typeof KEYS)[number], string>>;
@@ -40,12 +43,16 @@ afterEach(() => {
 });
 
 // ─── helpers to re-import env fresh ──────────────────────────────────────────
-// env.ts uses a Proxy that calls readEnv() on every property access, so we
-// can test it via the exported `env` object without re-importing the module.
+// env.ts exposes a lazy Proxy that calls readEnv() on every property access, so
+// we can test it via the exported `env` object without re-importing the module.
 async function getEnv() {
   // Dynamic import with cache-busting timestamp so each test gets a fresh module.
   const mod = await import(`./env.ts?t=${Date.now()}`) as typeof import("./env.ts");
   return mod.env;
+}
+
+async function getEnvModule() {
+  return (await import(`./env.ts?t=${Date.now()}`)) as typeof import("./env.ts");
 }
 
 // ─── tests ───────────────────────────────────────────────────────────────────
@@ -83,9 +90,9 @@ test("BOB_CLI_PATH is overridable", async () => {
   assert.equal(env.BOB_CLI_PATH, "/usr/local/bin/bob.js");
 });
 
-test("BOB_MAX_TURNS defaults to 8", async () => {
+test("BOB_MAX_TURNS defaults to 16", async () => {
   const env = await getEnv();
-  assert.equal(env.BOB_MAX_TURNS, 8);
+  assert.equal(env.BOB_MAX_TURNS, 16);
 });
 
 test("REPOMAP_CLONE_TIMEOUT_MS defaults to 120000", async () => {
@@ -107,4 +114,35 @@ test("env proxy re-reads process.env on each access", async () => {
   // Now change the env var in the same process — Proxy must reflect the new value.
   process.env.REPOMAP_PROVIDER = "bob-2.0";
   assert.equal(env.REPOMAP_PROVIDER, "bob-2.0");
+});
+
+// Regression: an invalid .env.local value used to throw while env.ts was being
+// imported, so the route handler never ran and the client received an empty
+// non-JSON body instead of the JSON error envelope. Validation must now be
+// deferred to property access so callers can catch it.
+test("invalid config throws EnvConfigError on access, not on import", async () => {
+  process.env.REPOMAP_PROVIDER = "bob-2.0bob_prod_secret";
+  const { env: lazyEnv, EnvConfigError } = await getEnvModule();
+
+  assert.throws(
+    () => lazyEnv.REPOMAP_PROVIDER,
+    (error: unknown) => error instanceof EnvConfigError && error.keys.includes("REPOMAP_PROVIDER"),
+  );
+});
+
+test("EnvConfigError names the variable but never its value", async () => {
+  process.env.BOB_API_KEY = "not-a-real-key-abcdef";
+  process.env.BOB_ENDPOINT = "not a url";
+  const { env: lazyEnv, EnvConfigError } = await getEnvModule();
+
+  assert.throws(
+    () => lazyEnv.BOB_ENDPOINT,
+    (error: unknown) => {
+      assert.ok(error instanceof EnvConfigError);
+      assert.match(error.message, /BOB_ENDPOINT/);
+      assert.doesNotMatch(error.message, /not a url/);
+      assert.doesNotMatch(error.message, /not-a-real-key-abcdef/);
+      return true;
+    },
+  );
 });

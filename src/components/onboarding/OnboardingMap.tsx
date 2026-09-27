@@ -1,5 +1,6 @@
 "use client";
 
+import { saveRepoMap } from "@/features/repomap/store";
 import { useState, FormEvent } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { RepoMapAnalysis } from "@/types/onboarding";
@@ -222,6 +223,7 @@ export function OnboardingMap() {
 
     const result = await analyzeRepositoryClient(trimmed);
     if (result.ok) {
+      saveRepoMap(result.analysis);
       const analysis = convertRepoMapToAnalysis(result.analysis);
       setState({ phase: "success", analysis, repoUrl: result.analysis.repository.url });
     } else {

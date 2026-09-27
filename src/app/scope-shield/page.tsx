@@ -16,8 +16,9 @@ export default function ScopeShieldPage() {
         Stage 4 — a drafted professional reply. Stage 5 — the detected
         repository context every output is grounded in. Stage 6 — loading,
         validation and error states. Clicking &quot;Analyze Scope&quot; sends the request
-        to IBM Bob 2.0 via /api/scope/analyze; if Bob is unavailable the UI
-        falls back to deterministic mock generators.
+        to /api/scope-shield, where the server runs IBM Bob 2.0 against the
+        analysed repository. A Bob failure is reported as a failure: the results
+        are never replaced with mock data.
       </p>
 
       <div className="mt-8">
