@@ -19,6 +19,7 @@
     "@react-three/fiber": "^9.8.1",
     "@types/three": "^0.186.0",
     "@xyflow/react": "^12.10.1",
+    "bobshell": "https://s3.us-south.cloud-object-storage.appdomain.cloud/bob-shell/bobshell-2.0.5.tgz",
     "lucide-react": "^1.48.0",
     "next": "16.3.6",
     "react": "19.2.8",
