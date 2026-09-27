@@ -703,19 +703,18 @@ Current state of the automated checks:
 | --- | --- |
 | `pnpm test` | **166 passed, 0 failed** |
 | `pnpm typecheck` | clean, 0 errors |
-| `pnpm lint` | 0 errors, 2 warnings (both pre-existing) |
+| `pnpm lint` | 0 errors, 0 warnings |
 | `pnpm build` | successful |
 | `git diff --check` | clean |
 
-The two lint warnings are the same pre-existing issue: an unused `nodes` binding
-in `src/features/onboarding-map/diagram.tsx`, reported once for this project and
-once for a duplicate under `.kilo/worktrees/`. Neither is an error and neither
-is in the active render path.
+`pnpm lint` is now clean. The unused `nodes` binding in
+`src/features/onboarding-map/diagram.tsx` has been removed, and
+`.kilo/worktrees/` is excluded via `eslint.config.mjs` — which is what eliminates
+the duplicate second warning.
 
-On Windows, `git diff --check` also prints `LF will be replaced by CRLF`
-notices for files such as `README.md` and `src/lib/env.ts`. Those are
-line-ending informational messages, not whitespace errors — the command still
-exits 0.
+On Windows the working tree uses `core.autocrlf=true`; `git diff --check` on the
+current diff emits no `LF will be replaced by CRLF` notices and exits 0. Any such
+line-ending notices are informational, not whitespace errors.
 
 The build emits the expected application and API routes:
 

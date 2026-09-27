@@ -160,7 +160,7 @@ export function RepoDiagram({
     [baseNodes, selectedModuleId],
   );
 
-  const [nodes, , onNodesChange] = useNodesState(styledNodes);
+  const [, , onNodesChange] = useNodesState(styledNodes);
   const [edges, , onEdgesChange] = useEdgesState(baseEdges);
 
   const handleNodeClick: NodeMouseHandler = useCallback(
