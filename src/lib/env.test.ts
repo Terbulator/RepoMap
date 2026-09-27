@@ -90,9 +90,9 @@ test("BOB_CLI_PATH is overridable", async () => {
   assert.equal(env.BOB_CLI_PATH, "/usr/local/bin/bob.js");
 });
 
-test("BOB_MAX_TURNS defaults to 16", async () => {
+test("BOB_MAX_TURNS defaults to 32", async () => {
   const env = await getEnv();
-  assert.equal(env.BOB_MAX_TURNS, 16);
+  assert.equal(env.BOB_MAX_TURNS, 32);
 });
 
 test("REPOMAP_CLONE_TIMEOUT_MS defaults to 120000", async () => {

@@ -25,7 +25,7 @@ const serverEnvSchema = z.object({
   REPOMAP_WORKSPACE_DIR: z.string().min(1).optional(),
   REPOMAP_CLONE_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   BOB_CLI_PATH: z.string().min(1).default("bob"),
-  BOB_MAX_TURNS: z.coerce.number().int().positive().default(16),
+  BOB_MAX_TURNS: z.coerce.number().int().positive().default(32),
   BOB_TIMEOUT_MS: z.coerce.number().int().positive().default(900_000),
   BOB_API_KEY: z.string().min(1).optional(),
   BOB_ENDPOINT: z.string().url().optional(),
